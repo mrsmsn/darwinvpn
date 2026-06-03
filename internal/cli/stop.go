@@ -18,7 +18,7 @@ func newStopCmd(mgr vpn.Manager) *cobra.Command {
 			if len(args) == 1 {
 				name = args[0]
 			}
-			svc, err := resolveService(cmd.Context(), mgr, name)
+			svc, err := resolveService(cmd, mgr, name)
 			if err != nil {
 				return err
 			}
