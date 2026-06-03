@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }} / go ${{ matrix.go }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15]
+        go: ['1.23.x', '1.24.x']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test -race -count=1 ./...
+
+      - name: go build (smoke)
+        env:
+          CGO_ENABLED: '1'
+        run: go build -o /tmp/darwinvpn ./cmd/darwinvpn
+
+      - name: smoke run
+        run: |
+          /tmp/darwinvpn version
+          /tmp/darwinvpn --help
