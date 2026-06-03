@@ -103,11 +103,16 @@ static NSArray *load_configurations(int *err_out) {
     }
 }
 
-// is_ikev2 returns YES when configuration represents an IKEv2 Personal VPN.
-// The probe (docs/phase1-probe) showed NEConfigurationManager returns
-// firewall, Network Privacy, and Tunnel Provider entries as well; we must
-// filter to IKEv2 only.
-static BOOL is_ikev2(id configuration) {
+// is_vpn returns YES when configuration represents a VPN-flavoured
+// NEConfiguration (anything with a non-nil VPN payload). The probe
+// (docs/phase1-probe) showed NEConfigurationManager also returns
+// application-firewall and Network Privacy entries; those have VPN == nil
+// and are filtered here. probe2 then showed that both NEVPNProtocolIKEv2
+// (Personal VPN) and NETunnelProviderProtocol (Tailscale et al.) return
+// the correct status when probed with ne_session_create(uuid,
+// NESessionTypeVPN=1), so no further protocol-class restriction is
+// required to match scutil --nc list's coverage plus IKEv2.
+static BOOL is_vpn(id configuration) {
     if (!configuration) return NO;
     id vpn = nil;
     @try {
@@ -115,16 +120,7 @@ static BOOL is_ikev2(id configuration) {
     } @catch (NSException *e) {
         return NO;
     }
-    if (!vpn) return NO;
-
-    SEL protoSel = NSSelectorFromString(@"protocol");
-    if (![vpn respondsToSelector:protoSel]) return NO;
-    id protocol = ((id (*)(id, SEL))[vpn methodForSelector:protoSel])(vpn, protoSel);
-    if (!protocol) return NO;
-
-    Class ikev2Class = NSClassFromString(@"NEVPNProtocolIKEv2");
-    if (!ikev2Class) return NO;
-    return [protocol isKindOfClass:ikev2Class];
+    return vpn != nil;
 }
 
 // find_configuration returns the NEConfiguration whose identifier UUIDString
@@ -198,7 +194,7 @@ int dvpn_list(dvpn_service_t **services, int *count) {
 
         NSMutableArray *filtered = [NSMutableArray array];
         for (id cfg in configurations) {
-            if (is_ikev2(cfg)) [filtered addObject:cfg];
+            if (is_vpn(cfg)) [filtered addObject:cfg];
         }
         if (filtered.count == 0) return DVPN_OK;
 

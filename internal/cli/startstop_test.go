@@ -65,7 +65,7 @@ func TestStop_NotActiveReturnsSentinel(t *testing.T) {
 
 func TestStart_NoProfiles(t *testing.T) {
 	_, err := runCLI(t, vpn.NewFakeManager(nil), "start")
-	if err == nil || !strings.Contains(err.Error(), "no IKEv2 VPN profile") {
+	if err == nil || !strings.Contains(err.Error(), "no VPN profile") {
 		t.Errorf("expected no-profile error, got %v", err)
 	}
 }

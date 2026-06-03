@@ -26,7 +26,7 @@ func TestList_NoProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	if !strings.Contains(out, "no IKEv2 VPN profile registered") {
+	if !strings.Contains(out, "no VPN profile registered") {
 		t.Errorf("expected empty-state message; got %q", out)
 	}
 }

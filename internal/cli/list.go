@@ -47,7 +47,7 @@ func writeServicesJSON(w io.Writer, services []vpn.Service) error {
 
 func writeServicesTable(w io.Writer, services []vpn.Service) error {
 	if len(services) == 0 {
-		_, err := fmt.Fprintln(w, "(no IKEv2 VPN profile registered)")
+		_, err := fmt.Fprintln(w, "(no VPN profile registered)")
 		return err
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)

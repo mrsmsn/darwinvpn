@@ -13,8 +13,8 @@ import (
 // than one IKEv2 profile, so there is no obvious default to act on.
 var errAmbiguous = errors.New("multiple profiles registered; specify one by name")
 
-// errNoProfiles indicates List() returned zero IKEv2 profiles.
-var errNoProfiles = errors.New("no IKEv2 VPN profile is registered on this system")
+// errNoProfiles indicates List() returned zero VPN profiles.
+var errNoProfiles = errors.New("no VPN profile is registered on this system")
 
 // resolveService picks the Service to operate on. When name is empty, the
 // single registered profile is used; if more than one exists, errAmbiguous is

@@ -27,7 +27,7 @@ func TestIntegration_NewDarwinManager(t *testing.T) {
 	}
 }
 
-func TestIntegration_ListReturnsOnlyIKEv2(t *testing.T) {
+func TestIntegration_ListReturnsAllVPNs(t *testing.T) {
 	mgr, err := vpn.NewDarwinManager()
 	if err != nil {
 		t.Fatalf("NewDarwinManager: %v", err)
@@ -36,12 +36,12 @@ func TestIntegration_ListReturnsOnlyIKEv2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	t.Logf("found %d IKEv2 service(s)", len(services))
+	t.Logf("found %d VPN service(s)", len(services))
 	for _, s := range services {
 		t.Logf("  %-30s [%s] status=%s", s.Name, s.UUID, s.Status)
 	}
 	if len(services) == 0 {
-		t.Skip("no IKEv2 VPN configured on this host; configure one in " +
+		t.Skip("no VPN configured on this host; configure one in " +
 			"System Settings to verify the filter end-to-end")
 	}
 	for _, s := range services {
@@ -51,12 +51,12 @@ func TestIntegration_ListReturnsOnlyIKEv2(t *testing.T) {
 		if s.UUID == "" {
 			t.Errorf("empty UUID: %+v", s)
 		}
-		// The probe confirmed firewall / network-privacy / Tunnel Provider
-		// entries also show up via NEConfigurationManager; if the filter is
-		// correct, none of those should appear here.
+		// Probe1 confirmed firewall / Network Privacy entries also surface
+		// via NEConfigurationManager but have VPN == nil; the filter must
+		// drop them.
 		switch s.Name {
-		case "com.apple.preferences.application-firewall", "Tailscale":
-			t.Errorf("non-IKEv2 configuration leaked through filter: %s", s.Name)
+		case "com.apple.preferences.application-firewall":
+			t.Errorf("non-VPN configuration leaked through filter: %s", s.Name)
 		}
 	}
 }
