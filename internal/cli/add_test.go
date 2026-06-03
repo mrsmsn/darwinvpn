@@ -9,12 +9,14 @@ import (
 	"github.com/mrsmsn/darwinvpn/internal/vpn"
 )
 
-func TestAdd_RequiresUseFlag(t *testing.T) {
+// Under `go test`, stdin/stdout are not terminals, so add without --use must
+// fall back to the explanatory error rather than attempting the TUI.
+func TestAdd_RequiresUseWhenNonInteractive(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
 	mgr := vpn.NewFakeManager([]vpn.Service{{UUID: "u-1", Name: "alpha"}})
 	_, err := runCLI(t, mgr, "--config", cfgPath, "add")
-	if err == nil || !strings.Contains(err.Error(), "--use") {
-		t.Errorf("expected --use error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "TTY") {
+		t.Errorf("expected non-TTY error mentioning --use, got %v", err)
 	}
 }
 

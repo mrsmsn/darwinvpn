@@ -67,7 +67,7 @@ Full specification: [`docs/pj.md`](docs/pj.md) (Japanese).
 ## Development
 
 ### Requirements
-- Go 1.23 or later
+- Go 1.25 or later (huh pulls a newer x/term)
 - macOS (the only supported runtime target)
 - [`just`](https://github.com/casey/just) (task runner)
 

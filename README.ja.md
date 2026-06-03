@@ -67,7 +67,7 @@ Phase 1 では `list` / `status` / `start` / `stop` が実機 VPN に対して�
 ## 開発
 
 ### 必要環境
-- Go 1.23 以上
+- Go 1.25 以上（huh 経由で新しい x/term を要求）
 - macOS（ビルド成果物の動作対象）
 - [`just`](https://github.com/casey/just)（タスクランナー）
 

@@ -3,9 +3,12 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
+	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/mrsmsn/darwinvpn/internal/config"
 	"github.com/mrsmsn/darwinvpn/internal/vpn"
@@ -21,26 +24,54 @@ func newAddCmd(mgr vpn.Manager) *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "add",
-		Short: "Register an existing system VPN as a darwinvpn profile (Mode A)",
-		Long: "Register an existing system VPN as a darwinvpn profile.\n\n" +
-			"Phase 1 only supports Mode A: pick a VPN that has already been\n" +
-			"installed on the host (System Settings > Network or a previously\n" +
-			"approved .mobileconfig) and record it in the YAML config. Mode B\n" +
-			"(interactive mobileconfig generation) lands in Phase 2.",
+		Short: "Register a system VPN as a darwinvpn profile",
+		Long: "Register a system VPN (one already installed via System Settings or\n" +
+			"a previously approved .mobileconfig) as a darwinvpn profile.\n\n" +
+			"Run without --use to pick the target interactively via a TUI.\n" +
+			"Pass --use <name-or-uuid> to skip the prompts (useful from scripts\n" +
+			"and non-interactive environments).",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if use == "" {
-				return errors.New("--use <name-or-uuid> is required (interactive mode arrives in Phase 2)")
-			}
 			services, err := mgr.List(cmd.Context())
 			if err != nil {
 				return err
 			}
-			svc, err := pickService(services, use)
-			if err != nil {
-				return err
+			if len(services) == 0 {
+				return errNoProfiles
 			}
+
+			interactive := use == ""
+			if interactive && !isTTY() {
+				return errors.New("--use is required when stdin/stdout is not a TTY")
+			}
+
+			var svc vpn.Service
+			if interactive {
+				if svc, err = selectServiceInteractive(services); err != nil {
+					return err
+				}
+			} else {
+				if svc, err = pickService(services, use); err != nil {
+					return err
+				}
+			}
+
 			if name == "" {
 				name = defaultProfileName(svc.Name)
+			}
+			if interactive {
+				if name, err = promptName(name); err != nil {
+					return err
+				}
+				if description == "" {
+					if description, err = promptDescription(); err != nil {
+						return err
+					}
+				}
+				if !cmd.Flags().Changed("default") {
+					if makeDefault, err = promptMakeDefault(); err != nil {
+						return err
+					}
+				}
 			}
 
 			cfgPath, _ := cmd.Flags().GetString("config")
@@ -71,7 +102,7 @@ func newAddCmd(mgr vpn.Manager) *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&use, "use", "", "system VPN to register (display name or UUID)")
+	cmd.Flags().StringVar(&use, "use", "", "system VPN to register (display name or UUID); omit for interactive mode")
 	cmd.Flags().StringVar(&name, "name", "", "profile name (default: derived from system display name)")
 	cmd.Flags().StringVar(&description, "description", "", "free-form description for the profile")
 	cmd.Flags().BoolVar(&makeDefault, "default", false, "make this profile the default")
@@ -144,4 +175,86 @@ func upsertProfile(cfg *config.Config, p Profile) error {
 		System:      config.System{DisplayName: p.system.Name, UUID: p.system.UUID},
 	})
 	return nil
+}
+
+func isTTY() bool {
+	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+}
+
+func selectServiceInteractive(services []vpn.Service) (vpn.Service, error) {
+	opts := make([]huh.Option[string], 0, len(services))
+	byUUID := make(map[string]vpn.Service, len(services))
+	for _, s := range services {
+		label := fmt.Sprintf("%s  (%s)", s.Name, s.Status)
+		opts = append(opts, huh.NewOption(label, s.UUID))
+		byUUID[s.UUID] = s
+	}
+	chosen := services[0].UUID
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Pick a system VPN to register").
+				Options(opts...).
+				Value(&chosen),
+		),
+	)
+	if err := form.Run(); err != nil {
+		return vpn.Service{}, err
+	}
+	return byUUID[chosen], nil
+}
+
+func promptName(initial string) (string, error) {
+	val := initial
+	f := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Profile name").
+				Description("Alias used by darwinvpn start/stop/status").
+				Value(&val).
+				Validate(func(s string) error {
+					if strings.TrimSpace(s) == "" {
+						return errors.New("name cannot be empty")
+					}
+					return nil
+				}),
+		),
+	)
+	if err := f.Run(); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(val), nil
+}
+
+func promptDescription() (string, error) {
+	var val string
+	f := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Description").
+				Description("Optional free-form note (press Enter to skip)").
+				Value(&val),
+		),
+	)
+	if err := f.Run(); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(val), nil
+}
+
+func promptMakeDefault() (bool, error) {
+	var v bool
+	f := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Make this the default profile?").
+				Affirmative("Yes").
+				Negative("No").
+				Value(&v),
+		),
+	)
+	if err := f.Run(); err != nil {
+		return false, err
+	}
+	return v, nil
 }
