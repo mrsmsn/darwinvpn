@@ -90,3 +90,33 @@ Sonoma と Sequoia の両方で確認できればベスト。片方だけでも�
 ## probe バイナリの扱い
 
 probe バイナリは git で追跡しない（リポジトリ全体の `.gitignore` で `*.test` 等は除外しているが、`probe` は無印実行ファイル名なので `docs/phase1-probe/probe` だけ別途無視するか手動削除すること）。
+
+---
+
+## probe2.m — scope 拡張用の調査
+
+`docs/pj.md` 当初の IKEv2 専用スコープを `scutil --nc list` 対象（Tailscale 等 Tunnel Provider 系）まで広げるかを判断するために、各 NEConfiguration の VPN payload と `ne_session_create` の `sessionType` 引数のマッピングを実機で観察する。
+
+### 確認したいこと
+
+1. NEConfiguration.VPN が non-nil なエントリのうち、protocol class が何か（`NEVPNProtocolIKEv2` / `NETunnelProviderProtocol` / 等）
+2. 各 NEConfiguration に対して `ne_session_create(uuid, sessionType)` を `1`（VPN）/ `5`（PacketTunnel）/ `9`（PluginVPN）の 3 値で呼び、`ne_session_get_status` がどう返るか
+3. どの protocol class がどの sessionType と対応するか
+
+### 実行
+
+```sh
+cd docs/phase1-probe
+clang -fobjc-arc -framework Foundation -framework NetworkExtension \
+    probe2.m -o probe2
+./probe2
+```
+
+`Start` も `Stop` も呼ばないので副作用なし。Tailscale が動いていてもそのまま走らせて大丈夫。
+
+### 期待する貼り戻し
+
+出力全文。特に:
+- mnxlab-vpn の `protocol class` と各 sessionType での status
+- Tailscale の `protocol class` と各 sessionType での status（NULL / TIMEOUT / 数値）
+- 他の VPN payload を持つエントリの結果
