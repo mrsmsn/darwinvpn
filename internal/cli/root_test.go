@@ -10,15 +10,6 @@ import (
 	"github.com/mrsmsn/darwinvpn/internal/vpn"
 )
 
-func newRoot(t *testing.T) *bytes.Buffer {
-	t.Helper()
-	buf := &bytes.Buffer{}
-	cmd := cli.NewRootCmd(vpn.NewFakeManager(nil))
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	return buf
-}
-
 func TestRoot_HelpListsAllSubcommands(t *testing.T) {
 	buf := &bytes.Buffer{}
 	cmd := cli.NewRootCmd(vpn.NewFakeManager(nil))
@@ -46,8 +37,10 @@ func TestRoot_PersistentFlagsAreDefined(t *testing.T) {
 	}
 }
 
-func TestSubcommands_ReturnNotImplemented(t *testing.T) {
-	for _, name := range []string{"list", "start", "stop", "status", "add", "init"} {
+// add / init are still stubs in Phase 1; verify they continue to surface
+// errNotImplemented until Phase 2 lands.
+func TestAddInit_StillStub(t *testing.T) {
+	for _, name := range []string{"add", "init"} {
 		t.Run(name, func(t *testing.T) {
 			buf := &bytes.Buffer{}
 			cmd := cli.NewRootCmd(vpn.NewFakeManager(nil))
@@ -59,9 +52,8 @@ func TestSubcommands_ReturnNotImplemented(t *testing.T) {
 				t.Fatalf("%s: expected error, got nil", name)
 			}
 			if !strings.Contains(err.Error(), "not yet implemented") {
-				t.Errorf("%s: error = %q, want to contain 'not yet implemented'", name, err.Error())
+				t.Errorf("%s: error = %q, want 'not yet implemented'", name, err.Error())
 			}
 		})
 	}
-	_ = newRoot
 }
