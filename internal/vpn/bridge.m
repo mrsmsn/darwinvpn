@@ -228,18 +228,77 @@ int dvpn_list(dvpn_service_t **services, int *count) {
     return DVPN_OK;
 }
 
+// Status integers per ne_session_status_t (verified in docs/phase1-probe).
+#define NE_STATUS_INVALID        0
+#define NE_STATUS_DISCONNECTED   1
+#define NE_STATUS_CONNECTING     2
+#define NE_STATUS_CONNECTED      3
+#define NE_STATUS_REASSERTING    4
+#define NE_STATUS_DISCONNECTING  5
+
 int dvpn_start(const char *uuid) {
-    (void)uuid;
-    return DVPN_ERR_INTERNAL;
+    if (!uuid) return DVPN_ERR_INTERNAL;
+    @autoreleasepool {
+        int err = DVPN_OK;
+        id cfg = find_configuration(uuid, &err);
+        if (!cfg) return err;
+        NSUUID *uid = [cfg performSelector:@selector(identifier)];
+
+        int current = NE_STATUS_INVALID;
+        int rc = fetch_status(uid, &current);
+        if (rc != DVPN_OK) return rc;
+        switch (current) {
+            case NE_STATUS_CONNECTING:
+            case NE_STATUS_CONNECTED:
+            case NE_STATUS_REASSERTING:
+                return DVPN_ERR_ALREADY;
+            default:
+                break;
+        }
+
+        uuid_t raw;
+        [uid getUUIDBytes:raw];
+        ne_session_t sess = ne_session_create(raw, NESESSION_TYPE_VPN);
+        if (!sess) return DVPN_ERR_INTERNAL;
+        ne_session_start(sess);
+        ne_session_release(sess);
+    }
+    return DVPN_OK;
 }
 
 int dvpn_stop(const char *uuid) {
-    (void)uuid;
-    return DVPN_ERR_INTERNAL;
+    if (!uuid) return DVPN_ERR_INTERNAL;
+    @autoreleasepool {
+        int err = DVPN_OK;
+        id cfg = find_configuration(uuid, &err);
+        if (!cfg) return err;
+        NSUUID *uid = [cfg performSelector:@selector(identifier)];
+
+        int current = NE_STATUS_INVALID;
+        int rc = fetch_status(uid, &current);
+        if (rc != DVPN_OK) return rc;
+        if (current == NE_STATUS_INVALID || current == NE_STATUS_DISCONNECTED) {
+            return DVPN_ERR_NOT_ACTIVE;
+        }
+
+        uuid_t raw;
+        [uid getUUIDBytes:raw];
+        ne_session_t sess = ne_session_create(raw, NESESSION_TYPE_VPN);
+        if (!sess) return DVPN_ERR_INTERNAL;
+        ne_session_stop(sess);
+        ne_session_release(sess);
+    }
+    return DVPN_OK;
 }
 
 int dvpn_status(const char *uuid, int *status_out) {
-    (void)uuid;
-    if (status_out) *status_out = 0;
-    return DVPN_ERR_INTERNAL;
+    if (!uuid || !status_out) return DVPN_ERR_INTERNAL;
+    *status_out = 0;
+    @autoreleasepool {
+        int err = DVPN_OK;
+        id cfg = find_configuration(uuid, &err);
+        if (!cfg) return err;
+        NSUUID *uid = [cfg performSelector:@selector(identifier)];
+        return fetch_status(uid, status_out);
+    }
 }

@@ -4,6 +4,7 @@ package vpn_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/mrsmsn/darwinvpn/internal/vpn"
@@ -57,5 +58,113 @@ func TestIntegration_ListReturnsOnlyIKEv2(t *testing.T) {
 		case "com.apple.preferences.application-firewall", "Tailscale":
 			t.Errorf("non-IKEv2 configuration leaked through filter: %s", s.Name)
 		}
+	}
+}
+
+func TestIntegration_Status_MatchesList(t *testing.T) {
+	mgr, err := vpn.NewDarwinManager()
+	if err != nil {
+		t.Fatalf("NewDarwinManager: %v", err)
+	}
+	ctx := context.Background()
+	services, err := mgr.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(services) == 0 {
+		t.Skip("no IKEv2 VPN configured; cannot exercise Status")
+	}
+	for _, s := range services {
+		got, err := mgr.Status(ctx, s.UUID)
+		if err != nil {
+			t.Errorf("Status(%s): %v", s.Name, err)
+			continue
+		}
+		t.Logf("  %s: List.Status=%s  Status()=%s", s.Name, s.Status, got)
+		// The two calls can race in principle (state may change between
+		// List and Status). We log mismatches rather than fail so the test
+		// remains useful even when a transition happens during the run.
+		if got != s.Status {
+			t.Logf("  NOTE: status changed between List and Status (acceptable)")
+		}
+	}
+}
+
+func TestIntegration_Status_UnknownUUID(t *testing.T) {
+	mgr, err := vpn.NewDarwinManager()
+	if err != nil {
+		t.Fatalf("NewDarwinManager: %v", err)
+	}
+	const bogus = "00000000-0000-0000-0000-000000000000"
+	_, err = mgr.Status(context.Background(), bogus)
+	if !errors.Is(err, vpn.ErrNotFound) {
+		t.Errorf("Status(bogus UUID): got %v, want errors.Is ErrNotFound", err)
+	}
+}
+
+// The next three tests inspect Start/Stop behavior without changing the
+// VPN's actual state: they only exercise the sentinel error paths driven
+// by the current status. A real start-then-stop round trip is gated on
+// DARWINVPN_INTEGRATION_DANGEROUS=1 in TestIntegration_StartStop_RoundTrip.
+
+func TestIntegration_Start_UnknownUUID(t *testing.T) {
+	mgr, err := vpn.NewDarwinManager()
+	if err != nil {
+		t.Fatalf("NewDarwinManager: %v", err)
+	}
+	const bogus = "00000000-0000-0000-0000-000000000000"
+	if err := mgr.Start(context.Background(), bogus); !errors.Is(err, vpn.ErrNotFound) {
+		t.Errorf("Start(bogus): got %v, want errors.Is ErrNotFound", err)
+	}
+}
+
+func TestIntegration_Start_AlreadyActive(t *testing.T) {
+	mgr, err := vpn.NewDarwinManager()
+	if err != nil {
+		t.Fatalf("NewDarwinManager: %v", err)
+	}
+	ctx := context.Background()
+	services, err := mgr.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	exercised := false
+	for _, s := range services {
+		switch s.Status {
+		case vpn.StatusConnecting, vpn.StatusConnected, vpn.StatusReasserting:
+			exercised = true
+			if err := mgr.Start(ctx, s.UUID); !errors.Is(err, vpn.ErrAlreadyActive) {
+				t.Errorf("Start(%s, status=%s): got %v, want ErrAlreadyActive",
+					s.Name, s.Status, err)
+			}
+		}
+	}
+	if !exercised {
+		t.Skip("no active session to exercise ErrAlreadyActive")
+	}
+}
+
+func TestIntegration_Stop_NotActive(t *testing.T) {
+	mgr, err := vpn.NewDarwinManager()
+	if err != nil {
+		t.Fatalf("NewDarwinManager: %v", err)
+	}
+	ctx := context.Background()
+	services, err := mgr.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	exercised := false
+	for _, s := range services {
+		if s.Status == vpn.StatusDisconnected || s.Status == vpn.StatusInvalid {
+			exercised = true
+			if err := mgr.Stop(ctx, s.UUID); !errors.Is(err, vpn.ErrNotActive) {
+				t.Errorf("Stop(%s, status=%s): got %v, want ErrNotActive",
+					s.Name, s.Status, err)
+			}
+		}
+	}
+	if !exercised {
+		t.Skip("no inactive session to exercise ErrNotActive")
 	}
 }
