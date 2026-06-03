@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -14,14 +16,21 @@ import (
 	"github.com/mrsmsn/darwinvpn/internal/vpn"
 )
 
+// addOpts is the input surface of runAdd. The CLI command populates it from
+// cobra flags; init reuses runAdd directly to chain interactive add after
+// config creation.
+type addOpts struct {
+	cfgPath         string
+	use             string
+	name            string
+	description     string
+	makeDefault     bool
+	force           bool
+	defaultExplicit bool
+}
+
 func newAddCmd(mgr vpn.Manager) *cobra.Command {
-	var (
-		use         string
-		name        string
-		description string
-		makeDefault bool
-		force       bool
-	)
+	opts := addOpts{}
 	cmd := &cobra.Command{
 		Use:   "add",
 		Short: "Register a system VPN as a darwinvpn profile",
@@ -31,83 +40,88 @@ func newAddCmd(mgr vpn.Manager) *cobra.Command {
 			"Pass --use <name-or-uuid> to skip the prompts (useful from scripts\n" +
 			"and non-interactive environments).",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			services, err := mgr.List(cmd.Context())
-			if err != nil {
-				return err
+			opts.cfgPath, _ = cmd.Flags().GetString("config")
+			if opts.cfgPath == "" {
+				opts.cfgPath = config.DefaultPath()
 			}
-			if len(services) == 0 {
-				return errNoProfiles
-			}
-
-			interactive := use == ""
-			if interactive && !isTTY() {
-				return errors.New("--use is required when stdin/stdout is not a TTY")
-			}
-
-			var svc vpn.Service
-			if interactive {
-				if svc, err = selectServiceInteractive(services); err != nil {
-					return err
-				}
-			} else {
-				if svc, err = pickService(services, use); err != nil {
-					return err
-				}
-			}
-
-			if name == "" {
-				name = defaultProfileName(svc.Name)
-			}
-			if interactive {
-				if name, err = promptName(name); err != nil {
-					return err
-				}
-				if description == "" {
-					if description, err = promptDescription(); err != nil {
-						return err
-					}
-				}
-				if !cmd.Flags().Changed("default") {
-					if makeDefault, err = promptMakeDefault(); err != nil {
-						return err
-					}
-				}
-			}
-
-			cfgPath, _ := cmd.Flags().GetString("config")
-			if cfgPath == "" {
-				cfgPath = config.DefaultPath()
-			}
-			cfg, err := loadOrInitConfig(cfgPath)
-			if err != nil {
-				return err
-			}
-			if err := upsertProfile(cfg, Profile{
-				name:        name,
-				description: description,
-				system:      svc,
-				force:       force,
-			}); err != nil {
-				return err
-			}
-			if makeDefault {
-				cfg.Default = name
-			}
-			if err := config.Save(cfg, cfgPath); err != nil {
-				return err
-			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(),
-				"registered profile %q -> %s [%s]\nconfig: %s\n",
-				name, svc.Name, svc.UUID, cfgPath)
-			return err
+			opts.defaultExplicit = cmd.Flags().Changed("default")
+			return runAdd(cmd.Context(), cmd.OutOrStdout(), mgr, &opts)
 		},
 	}
-	cmd.Flags().StringVar(&use, "use", "", "system VPN to register (display name or UUID); omit for interactive mode")
-	cmd.Flags().StringVar(&name, "name", "", "profile name (default: derived from system display name)")
-	cmd.Flags().StringVar(&description, "description", "", "free-form description for the profile")
-	cmd.Flags().BoolVar(&makeDefault, "default", false, "make this profile the default")
-	cmd.Flags().BoolVar(&force, "force", false, "overwrite an existing profile with the same name")
+	cmd.Flags().StringVar(&opts.use, "use", "", "system VPN to register (display name or UUID); omit for interactive mode")
+	cmd.Flags().StringVar(&opts.name, "name", "", "profile name (default: derived from system display name)")
+	cmd.Flags().StringVar(&opts.description, "description", "", "free-form description for the profile")
+	cmd.Flags().BoolVar(&opts.makeDefault, "default", false, "make this profile the default")
+	cmd.Flags().BoolVar(&opts.force, "force", false, "overwrite an existing profile with the same name")
 	return cmd
+}
+
+func runAdd(ctx context.Context, out io.Writer, mgr vpn.Manager, opts *addOpts) error {
+	services, err := mgr.List(ctx)
+	if err != nil {
+		return err
+	}
+	if len(services) == 0 {
+		return errNoProfiles
+	}
+
+	interactive := opts.use == ""
+	if interactive && !isTTY() {
+		return errors.New("--use is required when stdin/stdout is not a TTY")
+	}
+
+	var svc vpn.Service
+	if interactive {
+		if svc, err = selectServiceInteractive(services); err != nil {
+			return err
+		}
+	} else {
+		if svc, err = pickService(services, opts.use); err != nil {
+			return err
+		}
+	}
+
+	if opts.name == "" {
+		opts.name = defaultProfileName(svc.Name)
+	}
+	if interactive {
+		if opts.name, err = promptName(opts.name); err != nil {
+			return err
+		}
+		if opts.description == "" {
+			if opts.description, err = promptDescription(); err != nil {
+				return err
+			}
+		}
+		if !opts.defaultExplicit {
+			if opts.makeDefault, err = promptMakeDefault(); err != nil {
+				return err
+			}
+		}
+	}
+
+	cfg, err := loadOrInitConfig(opts.cfgPath)
+	if err != nil {
+		return err
+	}
+	if err := upsertProfile(cfg, Profile{
+		name:        opts.name,
+		description: opts.description,
+		system:      svc,
+		force:       opts.force,
+	}); err != nil {
+		return err
+	}
+	if opts.makeDefault {
+		cfg.Default = opts.name
+	}
+	if err := config.Save(cfg, opts.cfgPath); err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(out,
+		"registered profile %q -> %s [%s]\nconfig: %s\n",
+		opts.name, svc.Name, svc.UUID, opts.cfgPath)
+	return err
 }
 
 // Profile is a small internal projection used by upsertProfile so the CLI

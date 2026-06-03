@@ -2,7 +2,6 @@ package cli_test
 
 import (
 	"bytes"
-	"context"
 	"strings"
 	"testing"
 
@@ -37,20 +36,5 @@ func TestRoot_PersistentFlagsAreDefined(t *testing.T) {
 	}
 }
 
-// init is still a stub in Phase 1; verify it continues to surface
-// errNotImplemented until Phase 2 lands. add is functional via flags now;
-// its own tests live in add_test.go.
-func TestInit_StillStub(t *testing.T) {
-	buf := &bytes.Buffer{}
-	cmd := cli.NewRootCmd(vpn.NewFakeManager(nil))
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"init"})
-	err := cmd.ExecuteContext(context.Background())
-	if err == nil {
-		t.Fatal("init: expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "not yet implemented") {
-		t.Errorf("init: error = %q, want 'not yet implemented'", err.Error())
-	}
-}
+// add and init are both functional in Phase 2. Their own tests live in
+// add_test.go and init_test.go.
