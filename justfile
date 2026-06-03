@@ -15,9 +15,13 @@ build-versioned VERSION:
       -ldflags="-X 'github.com/mrsmsn/darwinvpn/internal/cli.version={{VERSION}}'" \
       -o darwinvpn ./cmd/darwinvpn
 
-# Run all tests with the race detector.
+# Run all unit tests with the race detector.
 test:
     go test -race -count=1 ./...
+
+# Run live macOS NetworkExtension integration tests (read-only; no Start/Stop).
+test-integration:
+    go test -v -tags integration -count=1 ./internal/vpn/...
 
 # Run go vet across the module.
 vet:

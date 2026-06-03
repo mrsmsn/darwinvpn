@@ -31,6 +31,14 @@ jobs:
       - name: go test
         run: go test -race -count=1 ./...
 
+      - name: go test (integration build check)
+        # CI hosts have no IKEv2 VPN configured, so most integration cases
+        # skip; we still want to keep the file compiling. -run NONE means
+        # nothing executes — only the build is exercised.
+        env:
+          CGO_ENABLED: '1'
+        run: go test -tags integration -run NONE ./internal/vpn/...
+
       - name: go build (smoke)
         env:
           CGO_ENABLED: '1'
