@@ -11,37 +11,42 @@ import (
 	"errors"
 )
 
-// Status represents a VPN session state. The concrete integer values used by
-// the underlying ne_session_status_t enum will be confirmed against a live
-// macOS runtime in Phase 1 (docs/pj.md §6.5). For Phase 0, callers only need
-// to compare against the named constants.
+// Status represents a VPN session state. The integer values are intentionally
+// aligned with macOS's ne_session_status_t so the cgo bridge can pass values
+// through without translation. The mapping was confirmed against a live
+// runtime via docs/phase1-probe (see docs/pj.md §6.5).
+//
+// StatusUnknown is darwinvpn-specific (negative so it cannot collide with the
+// kernel enum) and is used by the fake implementation and error paths.
 type Status int
 
 const (
-	StatusUnknown Status = iota
-	StatusInvalid
-	StatusDisconnected
-	StatusConnecting
-	StatusConnected
-	StatusReasserting
-	StatusDisconnecting
+	StatusInvalid       Status = 0
+	StatusDisconnected  Status = 1
+	StatusConnecting    Status = 2
+	StatusConnected     Status = 3
+	StatusReasserting   Status = 4
+	StatusDisconnecting Status = 5
+	StatusUnknown       Status = -1
 )
 
-var statusNames = [...]string{
-	"unknown",
-	"invalid",
-	"disconnected",
-	"connecting",
-	"connected",
-	"reasserting",
-	"disconnecting",
-}
-
 func (s Status) String() string {
-	if s < 0 || int(s) >= len(statusNames) {
+	switch s {
+	case StatusInvalid:
+		return "invalid"
+	case StatusDisconnected:
+		return "disconnected"
+	case StatusConnecting:
+		return "connecting"
+	case StatusConnected:
+		return "connected"
+	case StatusReasserting:
+		return "reasserting"
+	case StatusDisconnecting:
+		return "disconnecting"
+	default:
 		return "unknown"
 	}
-	return statusNames[s]
 }
 
 // Service represents a single VPN configuration enumerated from the system.
