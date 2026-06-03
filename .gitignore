@@ -1,5 +1,6 @@
 /darwinvpn
 /dist/
+/docs/phase1-probe/probe
 *.test
 *.out
 coverage.out
