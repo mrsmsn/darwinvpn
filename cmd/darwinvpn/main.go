@@ -11,8 +11,9 @@ import (
 func main() {
 	mgr, err := vpn.NewDarwinManager()
 	if err != nil {
-		// Phase 0: the bridge is a stub and returns ErrUnsupported.
-		// Fall back to the fake so --help and version still work end-to-end.
+		// Non-darwin platforms (or builds with CGO disabled) get a fake so
+		// --help and version still work; functional subcommands will report
+		// ErrUnsupported on the actual call.
 		mgr = vpn.NewFakeManager(nil)
 	}
 	if err := cli.NewRootCmd(mgr).Execute(); err != nil {
