@@ -37,23 +37,20 @@ func TestRoot_PersistentFlagsAreDefined(t *testing.T) {
 	}
 }
 
-// add / init are still stubs in Phase 1; verify they continue to surface
-// errNotImplemented until Phase 2 lands.
-func TestAddInit_StillStub(t *testing.T) {
-	for _, name := range []string{"add", "init"} {
-		t.Run(name, func(t *testing.T) {
-			buf := &bytes.Buffer{}
-			cmd := cli.NewRootCmd(vpn.NewFakeManager(nil))
-			cmd.SetOut(buf)
-			cmd.SetErr(buf)
-			cmd.SetArgs([]string{name})
-			err := cmd.ExecuteContext(context.Background())
-			if err == nil {
-				t.Fatalf("%s: expected error, got nil", name)
-			}
-			if !strings.Contains(err.Error(), "not yet implemented") {
-				t.Errorf("%s: error = %q, want 'not yet implemented'", name, err.Error())
-			}
-		})
+// init is still a stub in Phase 1; verify it continues to surface
+// errNotImplemented until Phase 2 lands. add is functional via flags now;
+// its own tests live in add_test.go.
+func TestInit_StillStub(t *testing.T) {
+	buf := &bytes.Buffer{}
+	cmd := cli.NewRootCmd(vpn.NewFakeManager(nil))
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"init"})
+	err := cmd.ExecuteContext(context.Background())
+	if err == nil {
+		t.Fatal("init: expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "not yet implemented") {
+		t.Errorf("init: error = %q, want 'not yet implemented'", err.Error())
 	}
 }

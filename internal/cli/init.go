@@ -6,11 +6,15 @@ import (
 	"github.com/mrsmsn/darwinvpn/internal/vpn"
 )
 
-func newInitCmd(_ vpn.Manager) *cobra.Command {
+func newInitCmd(mgr vpn.Manager) *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
-		Short: "Initialize a darwinvpn config file and add the first profile (Phase 2)",
+		Short: "Initialize a darwinvpn config file (Phase 2: interactive setup)",
+		Long: "Phase 1 hosts only the scaffolding for init. The Phase 2 implementation\n" +
+			"will create ~/.config/darwinvpn/config.yaml and then chain into\n" +
+			"interactive `add`.",
 		RunE: func(_ *cobra.Command, _ []string) error {
+			_ = mgr
 			return errNotImplemented
 		},
 	}
