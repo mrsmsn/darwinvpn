@@ -1,21 +1,23 @@
 # darwinvpn
 
+**English** | [日本語](README.ja.md)
+
 [![ci](https://github.com/mrsmsn/darwinvpn/actions/workflows/ci.yml/badge.svg)](https://github.com/mrsmsn/darwinvpn/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-macOS のネイティブ IKEv2 VPN を CLI から start/stop するための Go 製ツール。
+A Go-based CLI for starting and stopping macOS native IKEv2 VPN connections.
 
-> **Status: Phase 0 (scaffold)** — 足場のみ。VPN の実接続/切断機能は Phase 1 以降で実装予定。
+> **Status: Phase 0 (scaffold)** — only the scaffolding is in place. Actual VPN connect/disconnect functionality lands in Phase 1 and later.
 
-## なぜこれを作るのか
+## Why this exists
 
-macOS 標準の `scutil` / `networksetup` は IKEv2 の VPN サービスを扱えず、`scutil --nc list` にすら表示されない（Apple の長年の制約、`rdar://41950946`）。このため SSH セッションから VPN を制御できず、外出先から自宅 Mac 経由で社内 GitHub Enterprise に push できないといった困りごとが起こる。
+macOS's built-in `scutil` and `networksetup` cannot manage IKEv2 VPN services, and these services do not even appear in `scutil --nc list` (a long-standing Apple constraint, tracked as `rdar://41950946`). As a result you cannot control the VPN from an SSH session, which breaks workflows like pushing to an internal GitHub Enterprise through a home Mac when you are away from home.
 
-`darwinvpn` は `NEConfigurationManager` と `ne_session_*`（非公開 API）経由でこれを解決する Go 製 CLI を提供する。
+`darwinvpn` solves this by going through `NEConfigurationManager` and `ne_session_*` (private APIs) from a Go CLI.
 
-## インストール（Phase 0）
+## Installation (Phase 0)
 
-リリースバイナリは Phase 3 で配布予定。現状はソースからビルドする。
+Release binaries are planned for Phase 3. For now, build from source.
 
 ```sh
 git clone https://github.com/mrsmsn/darwinvpn.git
@@ -24,66 +26,66 @@ just build
 ./darwinvpn version
 ```
 
-## 使い方（予定）
+## Usage (planned)
 
 ```
-darwinvpn list                 # 登録プロファイルと接続状態を一覧
-darwinvpn start [name]         # 接続（name 省略時は default プロファイル）
-darwinvpn stop  [name]         # 切断
-darwinvpn status [name]        # 状態表示（--json で機械可読出力）
-darwinvpn add                  # 対話で新規プロファイルを作成
-darwinvpn init                 # 初回セットアップ（config 生成 + add）
-darwinvpn version              # バージョン情報
+darwinvpn list                 # List registered profiles and their connection state
+darwinvpn start [name]         # Connect (defaults to the default profile when name is omitted)
+darwinvpn stop  [name]         # Disconnect
+darwinvpn status [name]        # Show status (use --json for machine-readable output)
+darwinvpn add                  # Interactively create a new profile
+darwinvpn init                 # First-time setup (config generation + add)
+darwinvpn version              # Print version information
 ```
 
-Phase 0 時点で動くのは `version` / `--help` のみ。他は `not yet implemented` を返して exit 1。
+In Phase 0 only `version` and `--help` are functional. Every other subcommand prints `not yet implemented` and exits with status 1.
 
-## ロードマップ
+## Roadmap
 
-| Phase | スコープ | 状態 |
-|-------|---------|------|
-| 0 | cobra スケルトン、`vpn.Manager` interface、fake、macOS CI | done |
-| 1 | cgo + Objective-C ブリッジで `list/start/stop/status` MVP | next |
-| 2 | `add`/`init` で `.mobileconfig` 生成、Keychain / 1Password 連携 | planned |
-| 3 | シェル補完、`--json` 出力、LaunchAgent 常駐、Homebrew tap、notarized release | planned |
+| Phase | Scope | Status |
+|-------|-------|--------|
+| 0 | cobra skeleton, `vpn.Manager` interface, fake implementation, macOS CI | done |
+| 1 | cgo + Objective-C bridge for `list/start/stop/status` MVP | next |
+| 2 | `add` / `init` with `.mobileconfig` generation, Keychain / 1Password integration | planned |
+| 3 | shell completion, `--json` output, LaunchAgent daemon mode, Homebrew tap, notarized release | planned |
 
-詳細仕様は [`docs/pj.md`](docs/pj.md) を参照。
+Full specification: [`docs/pj.md`](docs/pj.md) (Japanese).
 
-## リポジトリ構造
+## Repository layout
 
 ```
 .
-├── cmd/darwinvpn/      # main エントリーポイント
+├── cmd/darwinvpn/      # main entry point
 ├── internal/
-│   ├── cli/            # cobra コマンドツリー
-│   └── vpn/            # Manager interface + fake + darwin bridge スタブ
-├── docs/pj.md          # プロジェクト方針書（仕様の一次情報）
+│   ├── cli/            # cobra command tree
+│   └── vpn/            # Manager interface + fake + darwin bridge stub
+├── docs/pj.md          # Project specification (single source of truth)
 ├── justfile            # build / test / vet / fmt / lint / clean
 └── .github/workflows/  # macOS x Go matrix CI
 ```
 
-## 開発
+## Development
 
-### 必要環境
-- Go 1.23 以上
-- macOS（ビルド成果物の動作対象）
-- [`just`](https://github.com/casey/just)（タスクランナー）
+### Requirements
+- Go 1.23 or later
+- macOS (the only supported runtime target)
+- [`just`](https://github.com/casey/just) (task runner)
 
-### よく使うコマンド
+### Common commands
 
 ```sh
-just            # recipes 一覧
-just build      # ./darwinvpn を生成（CGO_ENABLED=1）
+just            # list all recipes
+just build      # produce ./darwinvpn (CGO_ENABLED=1)
 just test       # go test -race -count=1 ./...
 just vet        # go vet ./...
 just fmt        # gofmt -w -s .
 just lint       # go vet + go mod tidy -diff
-just clean      # 生成物の削除
+just clean      # remove build artifacts
 ```
 
-### バージョン文字列の埋め込み
+### Embedding a version string
 
-`internal/cli.version` に ldflags で値を注入できる。
+`internal/cli.version` accepts an ldflags injection:
 
 ```sh
 just build-versioned v0.1.0-dev
@@ -91,20 +93,20 @@ just build-versioned v0.1.0-dev
 # darwinvpn v0.1.0-dev
 ```
 
-### テスト方針
+### Testing strategy
 
-`vpn.Manager` interface を境界として、cgo 依存の `bridge_darwin.go`（Phase 1 で実装）と in-memory な `fake.go` を分離している。CLI・config・provision のロジックは fake に対して高速に単体テストできる。実機 macOS でのみ動く `ne_session_*` 経路は Phase 1 以降に `//go:build integration` で隔離して追加予定。
+The `vpn.Manager` interface separates the cgo-backed `bridge_darwin.go` (filled in during Phase 1) from the in-memory `fake.go`. CLI, config, and provisioning logic can be unit-tested quickly against the fake without touching a real VPN. The `ne_session_*` code path, which only runs on a live macOS host, will be isolated behind `//go:build integration` once it is implemented.
 
-## ライセンス
+## License
 
-MIT License（[`LICENSE`](LICENSE) を参照）。
+MIT License — see [`LICENSE`](LICENSE).
 
-## クレジット
+## Credits
 
-このツールが依存する macOS の非公開 API（`NEConfigurationManager` / `ne_session_*` / `libsystem_networkextension.dylib`）の解析は、**Alexandre Colucci (Timac) 氏**のリバースエンジニアリング成果に基づく。
+The macOS private APIs this tool depends on (`NEConfigurationManager`, `ne_session_*`, `libsystem_networkextension.dylib`) were originally reverse-engineered by **Alexandre Colucci (Timac)**.
 
 - Blog: <https://blog.timac.org/2018/0717-macos-vpn-architecture/>
-- VPNStatus 解説: <https://blog.timac.org/2018/0719-vpnstatus/>
+- VPNStatus walkthrough: <https://blog.timac.org/2018/0719-vpnstatus/>
 - Reference implementation: <https://github.com/Timac/VPNStatus> (MIT)
 
-ソースコードは直接コピーせず Go で再実装している。
+The source code is not copied — `darwinvpn` is reimplemented from scratch in Go.
