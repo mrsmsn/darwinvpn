@@ -5,17 +5,17 @@
 [![ci](https://github.com/mrsmsn/darwinvpn/actions/workflows/ci.yml/badge.svg)](https://github.com/mrsmsn/darwinvpn/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-macOS のネイティブ IKEv2 VPN を CLI から start/stop するための Go 製ツール。
+macOS の VPN を CLI から start/stop するための Go 製ツール。`scutil` が扱えない IKEv2 だけでなく、Tailscale や WireGuard など Tunnel Provider 系の VPN も同じインターフェースで操作できる。
 
-> **Status: Phase 0 (scaffold)** — 足場のみ。VPN の実接続/切断機能は Phase 1 以降で実装予定。
+> **Status: Phase 1 in progress** — `list` / `status` / `start` / `stop` は実際の NetworkExtension に対して動作。`add` / `init` (Phase 2) と YAML プロファイルエイリアスは後続。
 
 ## なぜこれを作るのか
 
 macOS 標準の `scutil` / `networksetup` は IKEv2 の VPN サービスを扱えず、`scutil --nc list` にすら表示されない（Apple の長年の制約、`rdar://41950946`）。このため SSH セッションから VPN を制御できず、外出先から自宅 Mac 経由で社内 GitHub Enterprise に push できないといった困りごとが起こる。
 
-`darwinvpn` は `NEConfigurationManager` と `ne_session_*`（非公開 API）経由でこれを解決する Go 製 CLI を提供する。
+`darwinvpn` は `NEConfigurationManager` と `ne_session_*`（非公開 API）経由でこれを解決する。同じ経路で Tunnel Provider 系の VPN（Tailscale, WireGuard 等）も制御できるため、macOS が認識するあらゆる VPN を 1 つの CLI で扱える。
 
-## インストール（Phase 0）
+## インストール
 
 リリースバイナリは Phase 3 で配布予定。現状はソースからビルドする。
 
@@ -38,16 +38,16 @@ darwinvpn init                 # 初回セットアップ（config 生成 + add�
 darwinvpn version              # バージョン情報
 ```
 
-Phase 0 時点で動くのは `version` / `--help` のみ。他は `not yet implemented` を返して exit 1。
+Phase 1 では `list` / `status` / `start` / `stop` が実機 VPN に対して動作する。`add` / `init` はまだ `not yet implemented` を返す（Phase 2 で実装）。
 
 ## ロードマップ
 
 | Phase | スコープ | 状態 |
 |-------|---------|------|
 | 0 | cobra スケルトン、`vpn.Manager` interface、fake、macOS CI | done |
-| 1 | cgo + Objective-C ブリッジで `list/start/stop/status` MVP | next |
-| 2 | `add`/`init` で `.mobileconfig` 生成、Keychain / 1Password 連携 | planned |
-| 3 | シェル補完、`--json` 出力、LaunchAgent 常駐、Homebrew tap、notarized release | planned |
+| 1 | cgo + Objective-C ブリッジで `list/start/stop/status`、対象を IKEv2 + Tunnel Provider 系まで拡大 | in progress |
+| 2 | `add`/`init` で `.mobileconfig` 生成、YAML プロファイルエイリアス、Keychain / 1Password 連携 | planned |
+| 3 | シェル補完、LaunchAgent 常駐、Homebrew tap、notarized release | planned |
 
 詳細仕様は [`docs/pj.md`](docs/pj.md) を参照。
 
@@ -58,7 +58,7 @@ Phase 0 時点で動くのは `version` / `--help` のみ。他は `not yet impl
 ├── cmd/darwinvpn/      # main エントリーポイント
 ├── internal/
 │   ├── cli/            # cobra コマンドツリー
-│   └── vpn/            # Manager interface + fake + darwin bridge スタブ
+│   └── vpn/            # Manager interface + fake + darwin cgo bridge
 ├── docs/pj.md          # プロジェクト方針書(仕様の一次情報)
 ├── justfile            # build / test / vet / fmt / lint / clean
 └── .github/workflows/  # macOS x Go matrix CI
@@ -95,7 +95,13 @@ just build-versioned v0.1.0-dev
 
 ### テスト方針
 
-`vpn.Manager` interface を境界として、cgo 依存の `bridge_darwin.go`（Phase 1 で実装）と in-memory な `fake.go` を分離している。CLI・config・provision のロジックは fake に対して高速に単体テストできる。実機 macOS でのみ動く `ne_session_*` 経路は Phase 1 以降に `//go:build integration` で隔離して追加予定。
+`vpn.Manager` interface を境界として、cgo 依存の `bridge_darwin.go` と in-memory な `fake.go` を分離している。CLI・config・provision のロジックは fake に対して高速に単体テストできる。実機 macOS でのみ動く `ne_session_*` 経路は `//go:build integration` で隔離されている。
+
+```sh
+go test -v -tags integration -count=1 ./internal/vpn/...
+```
+
+integration テストは Start/Stop を呼ばない read-only な構成なので、VPN が接続中でも安全に実行できる。
 
 ## ライセンス
 

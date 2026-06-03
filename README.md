@@ -5,17 +5,17 @@
 [![ci](https://github.com/mrsmsn/darwinvpn/actions/workflows/ci.yml/badge.svg)](https://github.com/mrsmsn/darwinvpn/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A Go-based CLI for starting and stopping macOS native IKEv2 VPN connections.
+A Go-based CLI for starting and stopping macOS VPN connections — both native IKEv2 (which `scutil` cannot reach) and Tunnel Provider-based VPNs such as Tailscale, WireGuard, or OpenVPN.
 
-> **Status: Phase 0 (scaffold)** — only the scaffolding is in place. Actual VPN connect/disconnect functionality lands in Phase 1 and later.
+> **Status: Phase 1 in progress** — `list` / `status` / `start` / `stop` work end-to-end against the live NetworkExtension stack. `add` / `init` (Phase 2) and YAML profile aliases land later.
 
 ## Why this exists
 
-macOS's built-in `scutil` and `networksetup` cannot manage IKEv2 VPN services, and these services do not even appear in `scutil --nc list` (a long-standing Apple constraint, tracked as `rdar://41950946`). As a result you cannot control the VPN from an SSH session, which breaks workflows like pushing to an internal GitHub Enterprise through a home Mac when you are away from home.
+macOS's built-in `scutil` and `networksetup` cannot manage IKEv2 VPN services, and these services do not even appear in `scutil --nc list` (a long-standing Apple constraint, tracked as `rdar://41950946`). That breaks workflows like SSH'ing into a home Mac and pushing to an internal GitHub Enterprise: the VPN drops, scutil can't help, and you're stuck.
 
-`darwinvpn` solves this by going through `NEConfigurationManager` and `ne_session_*` (private APIs) from a Go CLI.
+`darwinvpn` goes through `NEConfigurationManager` and `ne_session_*` (private APIs) to do what scutil can't. The same code path also drives Tunnel Provider VPNs (Tailscale et al.), so the tool covers every VPN macOS knows about with one consistent CLI.
 
-## Installation (Phase 0)
+## Installation
 
 Release binaries are planned for Phase 3. For now, build from source.
 
@@ -38,16 +38,16 @@ darwinvpn init                 # First-time setup (config generation + add)
 darwinvpn version              # Print version information
 ```
 
-In Phase 0 only `version` and `--help` are functional. Every other subcommand prints `not yet implemented` and exits with status 1.
+In Phase 1, `list` / `status` / `start` / `stop` operate against the live VPN stack. `add` and `init` still print `not yet implemented` until Phase 2.
 
 ## Roadmap
 
 | Phase | Scope | Status |
 |-------|-------|--------|
 | 0 | cobra skeleton, `vpn.Manager` interface, fake implementation, macOS CI | done |
-| 1 | cgo + Objective-C bridge for `list/start/stop/status` MVP | next |
-| 2 | `add` / `init` with `.mobileconfig` generation, Keychain / 1Password integration | planned |
-| 3 | shell completion, `--json` output, LaunchAgent daemon mode, Homebrew tap, notarized release | planned |
+| 1 | cgo + Objective-C bridge for `list/start/stop/status`, scope covers both IKEv2 and Tunnel Provider VPNs | in progress |
+| 2 | `add` / `init` with `.mobileconfig` generation, YAML profile aliases, Keychain / 1Password integration | planned |
+| 3 | shell completion, LaunchAgent daemon mode, Homebrew tap, notarized release | planned |
 
 Full specification: [`docs/pj.md`](docs/pj.md) (Japanese).
 
@@ -58,7 +58,7 @@ Full specification: [`docs/pj.md`](docs/pj.md) (Japanese).
 ├── cmd/darwinvpn/      # main entry point
 ├── internal/
 │   ├── cli/            # cobra command tree
-│   └── vpn/            # Manager interface + fake + darwin bridge stub
+│   └── vpn/            # Manager interface + fake + darwin cgo bridge
 ├── docs/pj.md          # Project specification (single source of truth)
 ├── justfile            # build / test / vet / fmt / lint / clean
 └── .github/workflows/  # macOS x Go matrix CI
@@ -95,7 +95,13 @@ just build-versioned v0.1.0-dev
 
 ### Testing strategy
 
-The `vpn.Manager` interface separates the cgo-backed `bridge_darwin.go` (filled in during Phase 1) from the in-memory `fake.go`. CLI, config, and provisioning logic can be unit-tested quickly against the fake without touching a real VPN. The `ne_session_*` code path, which only runs on a live macOS host, will be isolated behind `//go:build integration` once it is implemented.
+The `vpn.Manager` interface separates the cgo-backed `bridge_darwin.go` from the in-memory `fake.go`. CLI, config, and provisioning logic are unit-tested quickly against the fake without touching a real VPN. The `ne_session_*` code path runs on a live macOS host and is isolated behind `//go:build integration`:
+
+```sh
+go test -v -tags integration -count=1 ./internal/vpn/...
+```
+
+The integration suite is read-only on the host VPN state (no Start/Stop is issued), so it is safe to run while a session is active.
 
 ## License
 
