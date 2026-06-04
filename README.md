@@ -17,7 +17,15 @@ macOS's built-in `scutil` and `networksetup` cannot manage IKEv2 VPN services, a
 
 ## Installation
 
-### `go install` (recommended)
+### Homebrew (recommended)
+
+```sh
+brew install mrsmsn/tap/darwinvpn
+```
+
+The tap ships pre-built binaries for Apple Silicon and Intel Macs as a Homebrew cask. No Go or Xcode Command Line Tools required, and the cask's `postflight` strips the quarantine attribute so the ad-hoc-signed binary launches without a Gatekeeper prompt.
+
+### `go install`
 
 If you already have Go ≥ 1.25 and Xcode Command Line Tools (`xcode-select --install`), one command is enough:
 
@@ -38,7 +46,7 @@ just build
 ./darwinvpn version
 ```
 
-Signed / notarized binaries and a Homebrew tap are tracked for a later release.
+Developer ID-signed and notarized binaries are tracked for a later release.
 
 ## Usage (planned)
 

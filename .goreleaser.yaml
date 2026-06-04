@@ -1,0 +1,84 @@
+version: 2
+
+project_name: darwinvpn
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: darwinvpn
+    main: ./cmd/darwinvpn
+    binary: darwinvpn
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - darwin
+    goarch:
+      - arm64
+      - amd64
+    ldflags:
+      - -s -w
+      - -X github.com/mrsmsn/darwinvpn/internal/cli.version={{.Version}}
+    flags:
+      - -trimpath
+
+archives:
+  - id: darwinvpn
+    ids:
+      - darwinvpn
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+    files:
+      - LICENSE
+      - README.md
+      - README.ja.md
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+      - "Merge branch"
+
+homebrew_casks:
+  - name: darwinvpn
+    skip_upload: auto
+    repository:
+      owner: mrsmsn
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/mrsmsn/darwinvpn"
+    description: "macOS CLI for IKEv2 and Tunnel Provider VPNs via NetworkExtension"
+    license: "MIT"
+    directory: Casks
+    binaries:
+      - darwinvpn
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "chore(cask): darwinvpn {{ .Tag }}"
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/darwinvpn"]
+          end
+
+release:
+  github:
+    owner: mrsmsn
+    name: darwinvpn
+  draft: false
+  prerelease: auto
