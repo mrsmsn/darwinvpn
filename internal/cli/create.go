@@ -12,8 +12,17 @@ import (
 
 	"github.com/mrsmsn/darwinvpn/internal/config"
 	"github.com/mrsmsn/darwinvpn/internal/provision"
+	"github.com/mrsmsn/darwinvpn/internal/secret"
 	"github.com/mrsmsn/darwinvpn/internal/vpn"
 )
+
+// modeBInput bundles the values runAddCreate collects up-front so the
+// provision step and the post-detect YAML write don't each need to repeat
+// the prompts.
+type modeBInput struct {
+	provision.Input
+	saveToKeychain bool
+}
 
 // installTimeout caps how long runAddCreate waits for the user to approve
 // the mobileconfig in System Settings. 5 minutes is the same ballpark the
@@ -33,7 +42,7 @@ func runAddCreate(ctx context.Context, out io.Writer, mgr vpn.Manager, opts *add
 		return errors.New("--create requires a TTY for interactive IKEv2 input")
 	}
 
-	in, err := promptIKEv2Input()
+	mb, err := promptIKEv2Input()
 	if err != nil {
 		return err
 	}
@@ -47,7 +56,7 @@ func runAddCreate(ctx context.Context, out io.Writer, mgr vpn.Manager, opts *add
 	listFn := func(ctx context.Context) ([]vpn.Service, error) {
 		return mgr.List(ctx)
 	}
-	svc, err := installAndDetect(ctxTimeout, in, listFn, 2*time.Second)
+	svc, err := installAndDetect(ctxTimeout, mb.Input, listFn, 2*time.Second)
 	if err != nil {
 		return err
 	}
@@ -72,6 +81,18 @@ func runAddCreate(ctx context.Context, out io.Writer, mgr vpn.Manager, opts *add
 		}
 	}
 
+	var sec *config.Secret
+	if mb.saveToKeychain {
+		ref := "darwinvpn/" + opts.name
+		if err := secret.NewKeychain().Set(ctx, ref, mb.Password); err != nil {
+			return fmt.Errorf("keychain save: %w", err)
+		}
+		sec = &config.Secret{Provider: "keychain", Ref: ref}
+		if _, err := fmt.Fprintf(out, "Saved EAP password to macOS Keychain as %q\n", ref); err != nil {
+			return err
+		}
+	}
+
 	cfg, err := loadOrInitConfig(opts.cfgPath)
 	if err != nil {
 		return err
@@ -80,6 +101,7 @@ func runAddCreate(ctx context.Context, out io.Writer, mgr vpn.Manager, opts *add
 		name:        opts.name,
 		description: opts.description,
 		system:      svc,
+		secret:      sec,
 		force:       opts.force,
 	}); err != nil {
 		return err
@@ -96,7 +118,7 @@ func runAddCreate(ctx context.Context, out io.Writer, mgr vpn.Manager, opts *add
 	return err
 }
 
-func promptIKEv2Input() (provision.Input, error) {
+func promptIKEv2Input() (modeBInput, error) {
 	var (
 		display         string
 		server          string
@@ -106,6 +128,7 @@ func promptIKEv2Input() (provision.Input, error) {
 		password        string
 		onDemandEnabled bool
 		matchDomainsCSV string
+		saveToKeychain  = true // keychain is the recommended default per pj.md §15
 	)
 	requiredText := func(label string) func(string) error {
 		return func(s string) error {
@@ -158,9 +181,17 @@ func promptIKEv2Input() (provision.Input, error) {
 				Description("Comma-separated list (only used when Connect On Demand is enabled)").
 				Value(&matchDomainsCSV),
 		),
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Save the EAP password to macOS Keychain?").
+				Description("Stores under account=darwinvpn so future re-installs can reuse it without re-prompting").
+				Affirmative("Yes").
+				Negative("No").
+				Value(&saveToKeychain),
+		),
 	)
 	if err := form.Run(); err != nil {
-		return provision.Input{}, err
+		return modeBInput{}, err
 	}
 	in := provision.Input{
 		DisplayName:      strings.TrimSpace(display),
@@ -176,7 +207,7 @@ func promptIKEv2Input() (provision.Input, error) {
 			MatchDomains: splitTrimNonEmpty(matchDomainsCSV, ","),
 		}
 	}
-	return in, nil
+	return modeBInput{Input: in, saveToKeychain: saveToKeychain}, nil
 }
 
 func splitTrimNonEmpty(s, sep string) []string {

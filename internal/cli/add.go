@@ -155,6 +155,7 @@ type Profile struct {
 	name        string
 	description string
 	system      vpn.Service
+	secret      *config.Secret
 	force       bool
 }
 
@@ -204,6 +205,7 @@ func upsertProfile(cfg *config.Config, p Profile) error {
 				Name:        p.name,
 				Description: p.description,
 				System:      config.System{DisplayName: p.system.Name, UUID: p.system.UUID},
+				Secret:      p.secret,
 			}
 			return nil
 		}
@@ -212,6 +214,7 @@ func upsertProfile(cfg *config.Config, p Profile) error {
 		Name:        p.name,
 		Description: p.description,
 		System:      config.System{DisplayName: p.system.Name, UUID: p.system.UUID},
+		Secret:      p.secret,
 	})
 	return nil
 }
