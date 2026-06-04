@@ -17,7 +17,19 @@ macOS's built-in `scutil` and `networksetup` cannot manage IKEv2 VPN services, a
 
 ## Installation
 
-Release binaries are planned for Phase 3. For now, build from source.
+### `go install` (recommended)
+
+If you already have Go ≥ 1.25 and Xcode Command Line Tools (`xcode-select --install`), one command is enough:
+
+```sh
+go install github.com/mrsmsn/darwinvpn/cmd/darwinvpn@latest
+```
+
+The binary lands at `$(go env GOPATH)/bin/darwinvpn`. Add `$GOPATH/bin` to your `PATH` if it isn't already and you can call `darwinvpn` directly.
+
+> **macOS only.** darwinvpn links the system's private NetworkExtension framework via cgo (`CGO_ENABLED=1` is the default in `go install`), so it builds and runs on macOS only.
+
+### From source
 
 ```sh
 git clone https://github.com/mrsmsn/darwinvpn.git
@@ -25,6 +37,8 @@ cd darwinvpn
 just build
 ./darwinvpn version
 ```
+
+Signed / notarized binaries and a Homebrew tap are tracked for a later release.
 
 ## Usage (planned)
 
@@ -38,16 +52,16 @@ darwinvpn init                 # First-time setup (config generation + add)
 darwinvpn version              # Print version information
 ```
 
-In Phase 1, `list` / `status` / `start` / `stop` operate against the live VPN stack. `add` and `init` still print `not yet implemented` until Phase 2.
+All subcommands above are functional. `list` / `status` / `start` / `stop` drive the real NetworkExtension stack; `add` / `init` walk you through registering an existing system VPN (Mode A) or building a brand-new IKEv2 + EAP `.mobileconfig` from scratch (Mode B).
 
 ## Roadmap
 
 | Phase | Scope | Status |
 |-------|-------|--------|
 | 0 | cobra skeleton, `vpn.Manager` interface, fake implementation, macOS CI | done |
-| 1 | cgo + Objective-C bridge for `list/start/stop/status`, scope covers both IKEv2 and Tunnel Provider VPNs | in progress |
-| 2 | `add` / `init` with `.mobileconfig` generation, YAML profile aliases, Keychain / 1Password integration | planned |
-| 3 | shell completion, LaunchAgent daemon mode, Homebrew tap, notarized release | planned |
+| 1 | cgo + Objective-C bridge for `list/start/stop/status`, scope covers both IKEv2 and Tunnel Provider VPNs | done |
+| 2 | `add` / `init` with `.mobileconfig` generation, YAML profile aliases, Keychain / 1Password integration | done |
+| 3 | `go install` distribution, shell completion, signed + notarized binaries, Homebrew tap, LaunchAgent daemon mode | in progress |
 
 Full specification: [`docs/pj.md`](docs/pj.md) (Japanese).
 

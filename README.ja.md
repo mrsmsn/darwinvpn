@@ -17,7 +17,19 @@ macOS 標準の `scutil` / `networksetup` は IKEv2 の VPN サービスを扱�
 
 ## インストール
 
-リリースバイナリは Phase 3 で配布予定。現状はソースからビルドする。
+### `go install`（推奨）
+
+Go 1.25 以上と Xcode Command Line Tools（`xcode-select --install`）が入っていれば、これ 1 行で導入できる。
+
+```sh
+go install github.com/mrsmsn/darwinvpn/cmd/darwinvpn@latest
+```
+
+バイナリは `$(go env GOPATH)/bin/darwinvpn` に置かれる。`$GOPATH/bin` が PATH に通っていれば、そのまま `darwinvpn` で呼び出せる。
+
+> **macOS 専用。** 非公開の NetworkExtension framework に cgo（`CGO_ENABLED=1` が `go install` の既定）でリンクするため、ビルド・動作とも macOS のみ。
+
+### ソースから
 
 ```sh
 git clone https://github.com/mrsmsn/darwinvpn.git
@@ -25,6 +37,8 @@ cd darwinvpn
 just build
 ./darwinvpn version
 ```
+
+署名・notarized バイナリと Homebrew tap は後のリリースで予定。
 
 ## 使い方（予定）
 
@@ -38,16 +52,16 @@ darwinvpn init                 # 初回セットアップ（config 生成 + add�
 darwinvpn version              # バージョン情報
 ```
 
-Phase 1 では `list` / `status` / `start` / `stop` が実機 VPN に対して動作する。`add` / `init` はまだ `not yet implemented` を返す（Phase 2 で実装）。
+上記サブコマンドはすべて実装済み。`list` / `status` / `start` / `stop` は実機 NetworkExtension を直接叩き、`add` / `init` は既存システム VPN の取り込み（Mode A）と IKEv2 + EAP の `.mobileconfig` 新規生成（Mode B）を対話で案内する。
 
 ## ロードマップ
 
 | Phase | スコープ | 状態 |
 |-------|---------|------|
 | 0 | cobra スケルトン、`vpn.Manager` interface、fake、macOS CI | done |
-| 1 | cgo + Objective-C ブリッジで `list/start/stop/status`、対象を IKEv2 + Tunnel Provider 系まで拡大 | in progress |
-| 2 | `add`/`init` で `.mobileconfig` 生成、YAML プロファイルエイリアス、Keychain / 1Password 連携 | planned |
-| 3 | シェル補完、LaunchAgent 常駐、Homebrew tap、notarized release | planned |
+| 1 | cgo + Objective-C ブリッジで `list/start/stop/status`、対象を IKEv2 + Tunnel Provider 系まで拡大 | done |
+| 2 | `add`/`init` で `.mobileconfig` 生成、YAML プロファイルエイリアス、Keychain / 1Password 連携 | done |
+| 3 | `go install` 配布、シェル補完、署名・notarized バイナリ、Homebrew tap、LaunchAgent 常駐 | in progress |
 
 詳細仕様は [`docs/pj.md`](docs/pj.md) を参照。
 
