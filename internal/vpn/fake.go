@@ -108,6 +108,8 @@ func (f *FakeManager) StatusDetail(ctx context.Context, uuid string) (StatusDeta
 		ServerAddress:    s.ServerAddress,
 		RemoteIdentifier: s.RemoteIdentifier,
 		Username:         s.Username,
+		IPv4Address:      s.IPv4Address,
+		IPv6Address:      s.IPv6Address,
 		ConnectedAt:      s.ConnectedAt,
 	}, nil
 }

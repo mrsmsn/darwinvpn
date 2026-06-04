@@ -13,7 +13,8 @@ func TestStatus_DefaultSingleProfile(t *testing.T) {
 	mgr := vpn.NewFakeManager([]vpn.Service{{
 		UUID: "u-1", Name: "alpha", Status: vpn.StatusConnected,
 		ServerAddress: "vpn.example.com", RemoteIdentifier: "vpn.example.com",
-		Username: "alice", ConnectedAt: time.Now().Add(-12*time.Minute - 34*time.Second),
+		Username: "alice", IPv4Address: "10.0.0.42", IPv6Address: "fd00::42",
+		ConnectedAt: time.Now().Add(-12*time.Minute - 34*time.Second),
 	}})
 	out, err := runCLI(t, mgr, "status")
 	if err != nil {
@@ -25,6 +26,8 @@ func TestStatus_DefaultSingleProfile(t *testing.T) {
 		"Server:      vpn.example.com",
 		"Remote ID:   vpn.example.com",
 		"Username:    alice",
+		"IPv4:        10.0.0.42",
+		"IPv6:        fd00::42",
 	} {
 		if !strings.Contains(out, line) {
 			t.Errorf("output missing %q\nfull output:\n%s", line, out)
@@ -102,7 +105,7 @@ func TestStatus_DisconnectedHidesConnectedAndDynamic(t *testing.T) {
 func TestStatus_OmitsEmptyFields(t *testing.T) {
 	mgr := vpn.NewFakeManager([]vpn.Service{{
 		UUID: "u-1", Name: "alpha", Status: vpn.StatusConnected,
-		ServerAddress: "vpn.example.com",
+		ServerAddress: "vpn.example.com", IPv4Address: "10.0.0.42",
 	}})
 	out, err := runCLI(t, mgr, "status")
 	if err != nil {
@@ -114,6 +117,12 @@ func TestStatus_OmitsEmptyFields(t *testing.T) {
 	if strings.Contains(out, "Username:") {
 		t.Errorf("empty Username line should be omitted, got:\n%s", out)
 	}
+	if strings.Contains(out, "IPv6:") {
+		t.Errorf("empty IPv6 line should be omitted, got:\n%s", out)
+	}
+	if !strings.Contains(out, "IPv4:        10.0.0.42") {
+		t.Errorf("expected IPv4 line, got:\n%s", out)
+	}
 }
 
 func TestStatus_JSON_AllFields(t *testing.T) {
@@ -121,7 +130,8 @@ func TestStatus_JSON_AllFields(t *testing.T) {
 	mgr := vpn.NewFakeManager([]vpn.Service{{
 		UUID: "u-1", Name: "alpha", Status: vpn.StatusConnected,
 		ServerAddress: "vpn.example.com", RemoteIdentifier: "vpn.example.com",
-		Username: "alice", ConnectedAt: connectedAt,
+		Username: "alice", IPv4Address: "10.0.0.42", IPv6Address: "fd00::42",
+		ConnectedAt: connectedAt,
 	}})
 	out, err := runCLI(t, mgr, "--json", "status")
 	if err != nil {
@@ -134,6 +144,8 @@ func TestStatus_JSON_AllFields(t *testing.T) {
 		Server      string  `json:"server"`
 		RemoteID    string  `json:"remote_id"`
 		Username    string  `json:"username"`
+		IPv4        string  `json:"ipv4"`
+		IPv6        string  `json:"ipv6"`
 		ConnectedAt *string `json:"connected_at"`
 	}
 	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
@@ -141,7 +153,8 @@ func TestStatus_JSON_AllFields(t *testing.T) {
 	}
 	if parsed.Name != "alpha" || parsed.Status != "connected" ||
 		parsed.Server != "vpn.example.com" || parsed.RemoteID != "vpn.example.com" ||
-		parsed.Username != "alice" {
+		parsed.Username != "alice" || parsed.IPv4 != "10.0.0.42" ||
+		parsed.IPv6 != "fd00::42" {
 		t.Errorf("unexpected JSON: %+v", parsed)
 	}
 	if parsed.ConnectedAt == nil || *parsed.ConnectedAt != "2026-06-04T08:12:34Z" {

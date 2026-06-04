@@ -105,6 +105,8 @@ func (d *darwinManager) StatusDetail(ctx context.Context, uuid string) (StatusDe
 		ServerAddress:    C.GoString(&c.server_address[0]),
 		RemoteIdentifier: C.GoString(&c.remote_identifier[0]),
 		Username:         C.GoString(&c.username[0]),
+		IPv4Address:      C.GoString(&c.ipv4_address[0]),
+		IPv6Address:      C.GoString(&c.ipv6_address[0]),
 	}
 	if c.connected_at_unix > 0 {
 		sd.ConnectedAt = time.Unix(int64(c.connected_at_unix), 0).UTC()

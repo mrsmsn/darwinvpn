@@ -45,6 +45,8 @@ type statusDetailJSON struct {
 	Server      string     `json:"server"`
 	RemoteID    string     `json:"remote_id"`
 	Username    string     `json:"username"`
+	IPv4        string     `json:"ipv4"`
+	IPv6        string     `json:"ipv6"`
 	ConnectedAt *time.Time `json:"connected_at"`
 }
 
@@ -56,6 +58,8 @@ func writeStatusJSON(w io.Writer, svc vpn.Service, sd vpn.StatusDetail) error {
 		Server:   sd.ServerAddress,
 		RemoteID: sd.RemoteIdentifier,
 		Username: sd.Username,
+		IPv4:     sd.IPv4Address,
+		IPv6:     sd.IPv6Address,
 	}
 	if sd.Status == vpn.StatusConnected && !sd.ConnectedAt.IsZero() {
 		t := sd.ConnectedAt.UTC()
@@ -75,6 +79,8 @@ func writeStatusText(w io.Writer, svc vpn.Service, sd vpn.StatusDetail, now time
 		{"Server:", sd.ServerAddress},
 		{"Remote ID:", sd.RemoteIdentifier},
 		{"Username:", sd.Username},
+		{"IPv4:", sd.IPv4Address},
+		{"IPv6:", sd.IPv6Address},
 	}
 	if sd.Status == vpn.StatusConnected && !sd.ConnectedAt.IsZero() {
 		rows = append(rows, [2]string{"Connected:", formatElapsed(now.Sub(sd.ConnectedAt))})
