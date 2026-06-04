@@ -9,6 +9,7 @@ package vpn
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 // Status represents a VPN session state. The integer values are intentionally
@@ -55,6 +56,30 @@ type Service struct {
 	UUID   string
 	Name   string
 	Status Status
+
+	// IKEv2-derived fields, populated when StatusDetail is called against an
+	// NEVPNProtocolIKEv2 configuration. Empty strings indicate the field is
+	// either unset on the configuration or the protocol is not IKEv2.
+	ServerAddress    string
+	RemoteIdentifier string
+	Username         string
+
+	// ConnectedAt is when the current session entered StatusConnected. Zero
+	// value means the session is not connected or the timestamp could not be
+	// retrieved from the system.
+	ConnectedAt time.Time
+}
+
+// StatusDetail is the rich view of a VPN session returned by
+// Manager.StatusDetail. It carries the live Status plus the IKEv2 fields and
+// connectedDate that bridge_darwin.go reads from NetworkExtension in a single
+// round trip.
+type StatusDetail struct {
+	Status           Status
+	ServerAddress    string
+	RemoteIdentifier string
+	Username         string
+	ConnectedAt      time.Time
 }
 
 // Manager abstracts VPN session control. Implementations must be safe for
@@ -64,6 +89,7 @@ type Manager interface {
 	Start(ctx context.Context, uuid string) error
 	Stop(ctx context.Context, uuid string) error
 	Status(ctx context.Context, uuid string) (Status, error)
+	StatusDetail(ctx context.Context, uuid string) (StatusDetail, error)
 }
 
 // Sentinel errors returned by Manager implementations. The bridge layer maps

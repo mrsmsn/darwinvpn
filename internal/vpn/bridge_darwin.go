@@ -13,6 +13,7 @@ import "C"
 import (
 	"context"
 	"fmt"
+	"time"
 	"unsafe"
 )
 
@@ -87,6 +88,28 @@ func (d *darwinManager) Status(ctx context.Context, uuid string) (Status, error)
 		return StatusUnknown, mapBridgeError(int(rc), "dvpn_status")
 	}
 	return Status(int(st)), nil
+}
+
+func (d *darwinManager) StatusDetail(ctx context.Context, uuid string) (StatusDetail, error) {
+	if err := ctx.Err(); err != nil {
+		return StatusDetail{}, err
+	}
+	cUUID := C.CString(uuid)
+	defer C.free(unsafe.Pointer(cUUID))
+	var c C.dvpn_status_detail_t
+	if rc := C.dvpn_status_detail(cUUID, &c); rc != C.DVPN_OK {
+		return StatusDetail{}, mapBridgeError(int(rc), "dvpn_status_detail")
+	}
+	sd := StatusDetail{
+		Status:           Status(int(c.status)),
+		ServerAddress:    C.GoString(&c.server_address[0]),
+		RemoteIdentifier: C.GoString(&c.remote_identifier[0]),
+		Username:         C.GoString(&c.username[0]),
+	}
+	if c.connected_at_unix > 0 {
+		sd.ConnectedAt = time.Unix(int64(c.connected_at_unix), 0).UTC()
+	}
+	return sd, nil
 }
 
 // mapBridgeError converts a C ABI error code into a Manager-layer sentinel

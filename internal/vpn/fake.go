@@ -93,5 +93,24 @@ func (f *FakeManager) Status(ctx context.Context, uuid string) (Status, error) {
 	return s.Status, nil
 }
 
+func (f *FakeManager) StatusDetail(ctx context.Context, uuid string) (StatusDetail, error) {
+	if err := ctx.Err(); err != nil {
+		return StatusDetail{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	s := f.findLocked(uuid)
+	if s == nil {
+		return StatusDetail{}, ErrNotFound
+	}
+	return StatusDetail{
+		Status:           s.Status,
+		ServerAddress:    s.ServerAddress,
+		RemoteIdentifier: s.RemoteIdentifier,
+		Username:         s.Username,
+		ConnectedAt:      s.ConnectedAt,
+	}, nil
+}
+
 // Compile-time interface assertion.
 var _ Manager = (*FakeManager)(nil)

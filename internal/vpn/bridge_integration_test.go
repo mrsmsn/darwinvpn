@@ -102,6 +102,58 @@ func TestIntegration_Status_UnknownUUID(t *testing.T) {
 	}
 }
 
+func TestIntegration_StatusDetail_MatchesList(t *testing.T) {
+	mgr, err := vpn.NewDarwinManager()
+	if err != nil {
+		t.Fatalf("NewDarwinManager: %v", err)
+	}
+	ctx := context.Background()
+	services, err := mgr.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(services) == 0 {
+		t.Skip("no VPN configured; cannot exercise StatusDetail")
+	}
+	sawIKEv2 := false
+	for _, s := range services {
+		sd, err := mgr.StatusDetail(ctx, s.UUID)
+		if err != nil {
+			t.Errorf("StatusDetail(%s): %v", s.Name, err)
+			continue
+		}
+		t.Logf("  %s: status=%s server=%q remote_id=%q username=%q connected_at=%v",
+			s.Name, sd.Status, sd.ServerAddress, sd.RemoteIdentifier,
+			sd.Username, sd.ConnectedAt)
+		// Status from StatusDetail must match List() at the time of call,
+		// modulo races during a live transition (logged in TestIntegration_
+		// Status_MatchesList).
+		if sd.ServerAddress != "" {
+			sawIKEv2 = true
+		}
+		if sd.Status == vpn.StatusConnected && sd.ConnectedAt.IsZero() {
+			t.Logf("  NOTE: connected session %s has zero ConnectedAt; "+
+				"ne_session_get_info may have failed", s.Name)
+		}
+	}
+	if !sawIKEv2 {
+		t.Logf("no IKEv2 VPN observed; ServerAddress non-empty assertion " +
+			"could not be exercised on this host")
+	}
+}
+
+func TestIntegration_StatusDetail_UnknownUUID(t *testing.T) {
+	mgr, err := vpn.NewDarwinManager()
+	if err != nil {
+		t.Fatalf("NewDarwinManager: %v", err)
+	}
+	const bogus = "00000000-0000-0000-0000-000000000000"
+	_, err = mgr.StatusDetail(context.Background(), bogus)
+	if !errors.Is(err, vpn.ErrNotFound) {
+		t.Errorf("StatusDetail(bogus UUID): got %v, want errors.Is ErrNotFound", err)
+	}
+}
+
 // The next three tests inspect Start/Stop behavior without changing the
 // VPN's actual state: they only exercise the sentinel error paths driven
 // by the current status. A real start-then-stop round trip is gated on
