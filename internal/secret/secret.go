@@ -39,7 +39,7 @@ func For(provider string) (Provider, error) {
 	case "keychain":
 		return NewKeychain(), nil
 	case "1password":
-		return nil, fmt.Errorf("%w: 1password lands in Phase 2 Step 6", ErrUnsupported)
+		return NewOnePassword(), nil
 	case "":
 		return nil, fmt.Errorf("%w: provider is empty", ErrUnsupported)
 	default:

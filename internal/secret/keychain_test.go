@@ -92,11 +92,14 @@ func TestFor_KnownProviders(t *testing.T) {
 	if _, err := For("keychain"); err != nil {
 		t.Errorf("For(keychain): %v", err)
 	}
-	if _, err := For("1password"); !errors.Is(err, ErrUnsupported) {
-		t.Errorf("For(1password) should still be unsupported; got %v", err)
+	if _, err := For("1password"); err != nil {
+		t.Errorf("For(1password): %v", err)
 	}
 	if _, err := For("nosuch"); !errors.Is(err, ErrUnsupported) {
 		t.Errorf("For(nosuch): %v", err)
+	}
+	if _, err := For(""); !errors.Is(err, ErrUnsupported) {
+		t.Errorf("For(empty): %v", err)
 	}
 }
 
