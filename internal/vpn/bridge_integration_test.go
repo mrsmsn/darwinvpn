@@ -122,9 +122,14 @@ func TestIntegration_StatusDetail_MatchesList(t *testing.T) {
 			t.Errorf("StatusDetail(%s): %v", s.Name, err)
 			continue
 		}
-		t.Logf("  %s: status=%s server=%q remote_id=%q username=%q connected_at=%v",
+		t.Logf("  %s: status=%s server=%q remote_id=%q username=%q ipv4=%q ipv6=%q connected_at=%v",
 			s.Name, sd.Status, sd.ServerAddress, sd.RemoteIdentifier,
-			sd.Username, sd.ConnectedAt)
+			sd.Username, sd.IPv4Address, sd.IPv6Address, sd.ConnectedAt)
+		if sd.Status == vpn.StatusConnected &&
+			sd.IPv4Address == "" && sd.IPv6Address == "" {
+			t.Logf("  NOTE: connected session %s has neither IPv4 nor IPv6 address",
+				s.Name)
+		}
 		// Status from StatusDetail must match List() at the time of call,
 		// modulo races during a live transition (logged in TestIntegration_
 		// Status_MatchesList).

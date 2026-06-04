@@ -32,6 +32,8 @@ typedef struct {
     char    server_address[256];
     char    remote_identifier[256];
     char    username[256];
+    char    ipv4_address[64];   // primary IPv4 bound to the tunnel interface
+    char    ipv6_address[64];   // primary IPv6 bound to the tunnel interface
     int64_t connected_at_unix;
 } dvpn_status_detail_t;
 

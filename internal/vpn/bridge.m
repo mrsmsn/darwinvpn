@@ -340,19 +340,52 @@ static void fill_protocol_fields(id cfg, dvpn_status_detail_t *out) {
     copy_cstr(out->username, sizeof(out->username), ike.username);
 }
 
-// fetch_connected_at_unix reads LastStatusChangeTime from the kind=2
-// ne_session_get_info dictionary. Returns 0 (treated by callers as
-// "unknown / not connected") on any failure or when the field is missing.
+// copy_xpc_string_into copies the first element of the "Addresses" array of
+// the family ("IPv4" / "IPv6") sub-dictionary into dst. Silently no-ops if
+// the path is missing or the value isn't a string.
+static void copy_first_address(xpc_object_t info, const char *family,
+                               char *dst, size_t dstcap) {
+    if (!info || !family || !dst || dstcap == 0) return;
+    dst[0] = '\0';
+    xpc_object_t fam = xpc_dictionary_get_value(info, family);
+    if (!fam || xpc_get_type(fam) != XPC_TYPE_DICTIONARY) return;
+    xpc_object_t addrs = xpc_dictionary_get_value(fam, "Addresses");
+    if (!addrs || xpc_get_type(addrs) != XPC_TYPE_ARRAY) return;
+    if (xpc_array_get_count(addrs) == 0) return;
+    xpc_object_t addr = xpc_array_get_value(addrs, 0);
+    if (!addr || xpc_get_type(addr) != XPC_TYPE_STRING) return;
+    const char *s = xpc_string_get_string_ptr(addr);
+    if (!s) return;
+    strncpy(dst, s, dstcap - 1);
+    dst[dstcap - 1] = '\0';
+}
+
+// fetch_session_state reads ConnectedAt and the bound IPv4/IPv6 addresses
+// from the kind=2 ne_session_get_info dictionary in a single round trip.
 // Only meaningful for sessions currently in NE_STATUS_CONNECTED; for other
-// states the timestamp would reflect a different transition.
-static int64_t fetch_connected_at_unix(NSUUID *uid) {
+// states LastStatusChangeTime reflects a different transition and the
+// address arrays would typically be absent.
+//
+// All writes go through __block scratch buffers and are committed to *out
+// only when the semaphore wait succeeds, so a timeout cannot leave the
+// caller with a torn payload.
+static void fetch_session_state(NSUUID *uid, dvpn_status_detail_t *out) {
+    if (!uid || !out) return;
     uuid_t raw;
     [uid getUUIDBytes:raw];
     ne_session_t sess = ne_session_create(raw, NESESSION_TYPE_VPN);
-    if (!sess) return 0;
+    if (!sess) return;
 
+    // Blocks cannot capture array-typed variables, so wrap the scratch
+    // buffers in a struct.
+    struct session_scratch {
+        int64_t connected_at_unix;
+        char    ipv4[sizeof(out->ipv4_address)];
+        char    ipv6[sizeof(out->ipv6_address)];
+    };
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
-    __block int64_t observed = 0;
+    __block struct session_scratch observed = {0};
+
     ne_session_get_info(sess, NE_SESSION_INFO_KIND_STATE, bridge_queue(),
                         ^(xpc_object_t info) {
         if (info && xpc_get_type(info) == XPC_TYPE_DICTIONARY) {
@@ -362,20 +395,22 @@ static int64_t fetch_connected_at_unix(NSUUID *uid) {
                 // xpc_date_get_value returns nanoseconds since the UNIX
                 // epoch (verified by probe3.m output matching wall time).
                 int64_t nanos = xpc_date_get_value(d);
-                observed = nanos / (int64_t)NSEC_PER_SEC;
+                observed.connected_at_unix = nanos / (int64_t)NSEC_PER_SEC;
             }
+            copy_first_address(info, "IPv4", observed.ipv4, sizeof(observed.ipv4));
+            copy_first_address(info, "IPv6", observed.ipv6, sizeof(observed.ipv6));
         }
         dispatch_semaphore_signal(sem);
     });
 
-    int64_t result = 0;
     if (dispatch_semaphore_wait(sem,
                                 dispatch_time(DISPATCH_TIME_NOW,
                                               5 * NSEC_PER_SEC)) == 0) {
-        result = observed;
+        out->connected_at_unix = observed.connected_at_unix;
+        memcpy(out->ipv4_address, observed.ipv4, sizeof(observed.ipv4));
+        memcpy(out->ipv6_address, observed.ipv6, sizeof(observed.ipv6));
     }
     ne_session_release(sess);
-    return result;
 }
 
 int dvpn_status_detail(const char *uuid, dvpn_status_detail_t *out) {
@@ -390,7 +425,7 @@ int dvpn_status_detail(const char *uuid, dvpn_status_detail_t *out) {
         if (rc != DVPN_OK) return rc;
         fill_protocol_fields(cfg, out);
         if (out->status == NE_STATUS_CONNECTED) {
-            out->connected_at_unix = fetch_connected_at_unix(uid);
+            fetch_session_state(uid, out);
         }
     }
     return DVPN_OK;

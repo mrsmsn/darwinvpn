@@ -64,6 +64,13 @@ type Service struct {
 	RemoteIdentifier string
 	Username         string
 
+	// IPv4Address / IPv6Address are the addresses currently bound to the
+	// tunnel interface (e.g. utun9, ipsec0), as reported by the live session
+	// state. Empty when the session is not connected or when the address
+	// family is not in use.
+	IPv4Address string
+	IPv6Address string
+
 	// ConnectedAt is when the current session entered StatusConnected. Zero
 	// value means the session is not connected or the timestamp could not be
 	// retrieved from the system.
@@ -79,6 +86,8 @@ type StatusDetail struct {
 	ServerAddress    string
 	RemoteIdentifier string
 	Username         string
+	IPv4Address      string
+	IPv6Address      string
 	ConnectedAt      time.Time
 }
 

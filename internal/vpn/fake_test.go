@@ -185,6 +185,8 @@ func TestStatusDetail_PassesThroughSeededFields(t *testing.T) {
 		ServerAddress:    "vpn.example.com",
 		RemoteIdentifier: "vpn.example.com",
 		Username:         "alice",
+		IPv4Address:      "10.0.0.42",
+		IPv6Address:      "fd00::42",
 		ConnectedAt:      connectedAt,
 	})
 	got, err := fm.StatusDetail(context.Background(), "u")
@@ -196,6 +198,8 @@ func TestStatusDetail_PassesThroughSeededFields(t *testing.T) {
 		ServerAddress:    "vpn.example.com",
 		RemoteIdentifier: "vpn.example.com",
 		Username:         "alice",
+		IPv4Address:      "10.0.0.42",
+		IPv6Address:      "fd00::42",
 		ConnectedAt:      connectedAt,
 	}
 	if got != want {
@@ -217,7 +221,8 @@ func TestStatusDetail_ZeroFieldsWhenUnset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StatusDetail: %v", err)
 	}
-	if got.ServerAddress != "" || got.RemoteIdentifier != "" || got.Username != "" {
+	if got.ServerAddress != "" || got.RemoteIdentifier != "" || got.Username != "" ||
+		got.IPv4Address != "" || got.IPv6Address != "" {
 		t.Errorf("expected empty strings, got %+v", got)
 	}
 	if !got.ConnectedAt.IsZero() {
