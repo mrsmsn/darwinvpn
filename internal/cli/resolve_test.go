@@ -36,7 +36,8 @@ profiles:
 	if err != nil {
 		t.Fatalf("status: %v", err)
 	}
-	if !strings.Contains(out, "alpha: connected") {
+	if !strings.Contains(out, "Name:        alpha") ||
+		!strings.Contains(out, "Status:      connected") {
 		t.Errorf("expected alpha resolved via profile; got %q", out)
 	}
 }
@@ -57,7 +58,8 @@ profiles:
 	if err != nil {
 		t.Fatalf("status: %v", err)
 	}
-	if !strings.Contains(out, "beta: connected") {
+	if !strings.Contains(out, "Name:        beta") ||
+		!strings.Contains(out, "Status:      connected") {
 		t.Errorf("expected beta resolved by UUID; got %q", out)
 	}
 }
@@ -80,7 +82,8 @@ profiles:
 	if err != nil {
 		t.Fatalf("status beta: %v", err)
 	}
-	if !strings.Contains(out, "beta: connected") {
+	if !strings.Contains(out, "Name:        beta") ||
+		!strings.Contains(out, "Status:      connected") {
 		t.Errorf("expected fallback to direct match; got %q", out)
 	}
 }
