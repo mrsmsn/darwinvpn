@@ -6,9 +6,11 @@
 #include "bridge.h"
 
 #import <Foundation/Foundation.h>
+#import <NetworkExtension/NetworkExtension.h>
 #import <dispatch/dispatch.h>
 #import <string.h>
 #import <stdlib.h>
+#import <xpc/xpc.h>
 
 // ---- Private declarations (Timac/VPNStatus, blog.timac.org) -----------------
 
@@ -24,6 +26,20 @@ extern void ne_session_get_status(ne_session_t session,
 
 extern void ne_session_start(ne_session_t session);
 extern void ne_session_stop(ne_session_t session);
+
+// ne_session_get_info returns an XPC dictionary describing the current
+// session state. kind=2 yields the dictionary that contains
+// "LastStatusChangeTime" (an XPC date == NSDate epoch), which is the
+// timestamp of the most recent state transition — i.e. when the session
+// entered Connected for a currently-connected VPN. This matches
+// NEVPNConnection.connectedDate's semantics for our purposes. Confirmed
+// against macOS 26.x via docs/phase1-probe/probe3.m.
+typedef void (^ne_session_info_block)(xpc_object_t info);
+extern void ne_session_get_info(ne_session_t session,
+                                int kind,
+                                dispatch_queue_t queue,
+                                ne_session_info_block block);
+#define NE_SESSION_INFO_KIND_STATE 2
 
 #define NESESSION_TYPE_VPN 1
 
@@ -297,4 +313,85 @@ int dvpn_status(const char *uuid, int *status_out) {
         NSUUID *uid = [cfg performSelector:@selector(identifier)];
         return fetch_status(uid, status_out);
     }
+}
+
+// fill_protocol_fields populates server_address / remote_identifier / username
+// from the IKEv2 protocol payload hanging off NEConfiguration.VPN.protocol.
+// NEVPNConfiguration is private but its `protocol` property has been stable
+// since macOS 10.11 (NetworkExtension was introduced) and is what the public
+// NEVPNManager.protocolConfiguration accessor returns. Non-IKEv2 protocols
+// (NETunnelProviderProtocol) are silently skipped — the fields stay empty.
+static void fill_protocol_fields(id cfg, dvpn_status_detail_t *out) {
+    if (!cfg || !out) return;
+    id vpnCfg = nil;
+    @try {
+        vpnCfg = [cfg performSelector:@selector(VPN)];
+    } @catch (NSException *e) {
+        return;
+    }
+    if (!vpnCfg) return;
+    SEL protoSel = NSSelectorFromString(@"protocol");
+    if (![vpnCfg respondsToSelector:protoSel]) return;
+    id proto = [vpnCfg performSelector:protoSel];
+    if (![proto isKindOfClass:[NEVPNProtocolIKEv2 class]]) return;
+    NEVPNProtocolIKEv2 *ike = (NEVPNProtocolIKEv2 *)proto;
+    copy_cstr(out->server_address, sizeof(out->server_address), ike.serverAddress);
+    copy_cstr(out->remote_identifier, sizeof(out->remote_identifier), ike.remoteIdentifier);
+    copy_cstr(out->username, sizeof(out->username), ike.username);
+}
+
+// fetch_connected_at_unix reads LastStatusChangeTime from the kind=2
+// ne_session_get_info dictionary. Returns 0 (treated by callers as
+// "unknown / not connected") on any failure or when the field is missing.
+// Only meaningful for sessions currently in NE_STATUS_CONNECTED; for other
+// states the timestamp would reflect a different transition.
+static int64_t fetch_connected_at_unix(NSUUID *uid) {
+    uuid_t raw;
+    [uid getUUIDBytes:raw];
+    ne_session_t sess = ne_session_create(raw, NESESSION_TYPE_VPN);
+    if (!sess) return 0;
+
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+    __block int64_t observed = 0;
+    ne_session_get_info(sess, NE_SESSION_INFO_KIND_STATE, bridge_queue(),
+                        ^(xpc_object_t info) {
+        if (info && xpc_get_type(info) == XPC_TYPE_DICTIONARY) {
+            xpc_object_t d = xpc_dictionary_get_value(info,
+                                                      "LastStatusChangeTime");
+            if (d && xpc_get_type(d) == XPC_TYPE_DATE) {
+                // xpc_date_get_value returns nanoseconds since the UNIX
+                // epoch (verified by probe3.m output matching wall time).
+                int64_t nanos = xpc_date_get_value(d);
+                observed = nanos / (int64_t)NSEC_PER_SEC;
+            }
+        }
+        dispatch_semaphore_signal(sem);
+    });
+
+    int64_t result = 0;
+    if (dispatch_semaphore_wait(sem,
+                                dispatch_time(DISPATCH_TIME_NOW,
+                                              5 * NSEC_PER_SEC)) == 0) {
+        result = observed;
+    }
+    ne_session_release(sess);
+    return result;
+}
+
+int dvpn_status_detail(const char *uuid, dvpn_status_detail_t *out) {
+    if (!uuid || !out) return DVPN_ERR_INTERNAL;
+    memset(out, 0, sizeof(*out));
+    @autoreleasepool {
+        int err = DVPN_OK;
+        id cfg = find_configuration(uuid, &err);
+        if (!cfg) return err;
+        NSUUID *uid = [cfg performSelector:@selector(identifier)];
+        int rc = fetch_status(uid, &out->status);
+        if (rc != DVPN_OK) return rc;
+        fill_protocol_fields(cfg, out);
+        if (out->status == NE_STATUS_CONNECTED) {
+            out->connected_at_unix = fetch_connected_at_unix(uid);
+        }
+    }
+    return DVPN_OK;
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/mrsmsn/darwinvpn/internal/vpn"
 )
@@ -172,6 +173,55 @@ func TestContextCancellation(t *testing.T) {
 	}
 	if err := fm.Start(ctx, "u"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("Start: got %v, want context.Canceled", err)
+	}
+}
+
+func TestStatusDetail_PassesThroughSeededFields(t *testing.T) {
+	connectedAt := time.Date(2026, 6, 4, 8, 12, 34, 0, time.UTC)
+	fm := newFake(t, vpn.Service{
+		UUID:             "u",
+		Name:             "n",
+		Status:           vpn.StatusConnected,
+		ServerAddress:    "vpn.example.com",
+		RemoteIdentifier: "vpn.example.com",
+		Username:         "alice",
+		ConnectedAt:      connectedAt,
+	})
+	got, err := fm.StatusDetail(context.Background(), "u")
+	if err != nil {
+		t.Fatalf("StatusDetail: %v", err)
+	}
+	want := vpn.StatusDetail{
+		Status:           vpn.StatusConnected,
+		ServerAddress:    "vpn.example.com",
+		RemoteIdentifier: "vpn.example.com",
+		Username:         "alice",
+		ConnectedAt:      connectedAt,
+	}
+	if got != want {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+}
+
+func TestStatusDetail_UnknownUUID_ReturnsErrNotFound(t *testing.T) {
+	fm := newFake(t)
+	_, err := fm.StatusDetail(context.Background(), "no-such")
+	if !errors.Is(err, vpn.ErrNotFound) {
+		t.Fatalf("got %v, want ErrNotFound", err)
+	}
+}
+
+func TestStatusDetail_ZeroFieldsWhenUnset(t *testing.T) {
+	fm := newFake(t, vpn.Service{UUID: "u", Status: vpn.StatusDisconnected})
+	got, err := fm.StatusDetail(context.Background(), "u")
+	if err != nil {
+		t.Fatalf("StatusDetail: %v", err)
+	}
+	if got.ServerAddress != "" || got.RemoteIdentifier != "" || got.Username != "" {
+		t.Errorf("expected empty strings, got %+v", got)
+	}
+	if !got.ConnectedAt.IsZero() {
+		t.Errorf("expected zero ConnectedAt, got %v", got.ConnectedAt)
 	}
 }
 

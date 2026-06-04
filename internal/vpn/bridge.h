@@ -10,6 +10,8 @@
 #ifndef DVPN_BRIDGE_H
 #define DVPN_BRIDGE_H
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -19,6 +21,19 @@ typedef struct {
     char uuid[40];    // NEConfiguration.identifier as UUID string
     int  status;      // ne_session_status_t value
 } dvpn_service_t;
+
+// dvpn_status_detail_t carries the rich status returned by dvpn_status_detail.
+// Strings are UTF-8 NUL-terminated and silently truncated to fit the buffer.
+// Empty strings mean the underlying NetworkExtension property is nil or the
+// protocol is not NEVPNProtocolIKEv2. connected_at_unix is 0 when the session
+// is not connected or the timestamp could not be retrieved.
+typedef struct {
+    int     status;
+    char    server_address[256];
+    char    remote_identifier[256];
+    char    username[256];
+    int64_t connected_at_unix;
+} dvpn_status_detail_t;
 
 // Error codes returned by the bridge.
 #define DVPN_OK              0
@@ -40,6 +55,11 @@ int dvpn_stop(const char *uuid);
 
 // Read the current ne_session_status_t for uuid into *status_out.
 int dvpn_status(const char *uuid, int *status_out);
+
+// Read the rich status (state plus IKEv2 protocol fields) for uuid into *out.
+// *out is zeroed on entry. Missing protocol fields are returned as empty
+// strings rather than as an error.
+int dvpn_status_detail(const char *uuid, dvpn_status_detail_t *out);
 
 #ifdef __cplusplus
 }
