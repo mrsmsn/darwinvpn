@@ -20,6 +20,18 @@ func TestAdd_RequiresUseWhenNonInteractive(t *testing.T) {
 	}
 }
 
+// --create (Mode B) requires interactive input, so it must surface the TTY
+// error in non-interactive contexts instead of trying to open System
+// Settings.
+func TestAddCreate_RequiresTTY(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+	mgr := vpn.NewFakeManager([]vpn.Service{{UUID: "u-1", Name: "alpha"}})
+	_, err := runCLI(t, mgr, "--config", cfgPath, "add", "--create")
+	if err == nil || !strings.Contains(err.Error(), "TTY") {
+		t.Errorf("expected TTY error, got %v", err)
+	}
+}
+
 func TestAdd_RegistersProfileFromSystemDisplayName(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
 	mgr := vpn.NewFakeManager([]vpn.Service{

@@ -22,6 +22,7 @@ import (
 type addOpts struct {
 	cfgPath         string
 	use             string
+	create          bool
 	name            string
 	description     string
 	makeDefault     bool
@@ -49,6 +50,7 @@ func newAddCmd(mgr vpn.Manager) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&opts.use, "use", "", "system VPN to register (display name or UUID); omit for interactive mode")
+	cmd.Flags().BoolVar(&opts.create, "create", false, "create a new IKEv2 VPN by generating a .mobileconfig (TTY required)")
 	cmd.Flags().StringVar(&opts.name, "name", "", "profile name (default: derived from system display name)")
 	cmd.Flags().StringVar(&opts.description, "description", "", "free-form description for the profile")
 	cmd.Flags().BoolVar(&opts.makeDefault, "default", false, "make this profile the default")
@@ -57,17 +59,40 @@ func newAddCmd(mgr vpn.Manager) *cobra.Command {
 }
 
 func runAdd(ctx context.Context, out io.Writer, mgr vpn.Manager, opts *addOpts) error {
+	// Mode B short-circuit: --create skips the existing-VPN listing entirely.
+	if opts.create {
+		return runAddCreate(ctx, out, mgr, opts)
+	}
+
 	services, err := mgr.List(ctx)
 	if err != nil {
 		return err
-	}
-	if len(services) == 0 {
-		return errNoProfiles
 	}
 
 	interactive := opts.use == ""
 	if interactive && !isTTY() {
 		return errors.New("--use is required when stdin/stdout is not a TTY")
+	}
+
+	// When the user runs `darwinvpn add` interactively and the system has
+	// at least one VPN already installed, ask whether they want Mode A
+	// (pick one) or Mode B (create a new one). With zero installed VPNs
+	// the only useful answer is Mode B, so jump straight there.
+	if interactive {
+		if len(services) == 0 {
+			opts.create = true
+			return runAddCreate(ctx, out, mgr, opts)
+		}
+		create, err := promptMode()
+		if err != nil {
+			return err
+		}
+		if create {
+			opts.create = true
+			return runAddCreate(ctx, out, mgr, opts)
+		}
+	} else if len(services) == 0 {
+		return errNoProfiles
 	}
 
 	var svc vpn.Service
